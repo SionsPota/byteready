@@ -1,4 +1,4 @@
-import { getKimiClient, KIMI_MODEL } from './llm/kimi.ts'
+import { getKimiClient, KIMI_INSTANT_MODE, KIMI_MODEL } from './llm/kimi.ts'
 
 const RESUME_CLEAN_PROMPT = `你是一位专业的简历文本清洗与格式化专家。你的任务是将从 PDF 提取的原始、混乱的简历文本，清洗成结构清晰、格式规范、易于阅读的标准 Markdown 文本。
 
@@ -57,6 +57,7 @@ export async function optimizeResumeText(rawText: string): Promise<string> {
       { role: 'user', content: rawText },
     ],
     temperature: 0.1,
+    ...KIMI_INSTANT_MODE,
   })
   const content = response.choices[0]?.message?.content
   if (!content) {

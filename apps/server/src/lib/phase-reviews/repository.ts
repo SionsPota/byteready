@@ -85,5 +85,9 @@ export const createPhaseReviewRepository = (db: DatabaseSync) => {
     getById: (id: string): PhaseReviewRow | null => {
       return db.prepare('SELECT * FROM phase_reviews WHERE id = ?').get(id) as PhaseReviewRow | undefined ?? null
     },
+
+    deleteBySession: (sessionId: string): void => {
+      db.prepare('DELETE FROM phase_reviews WHERE session_id = ?').run(sessionId)
+    },
   }
 }

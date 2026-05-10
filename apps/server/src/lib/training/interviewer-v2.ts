@@ -1,5 +1,7 @@
+import { readFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import { getKimiClient, KIMI_INSTANT_MODE, KIMI_MODEL } from '../llm/kimi.ts'
-import { loadSkill } from '../skills/prompt.ts'
+import { SKILLS_BASE_DIR } from '../skills/prompt.ts'
 import { renderSystemPrompt, type InterviewState, type StateContext } from './state-machine.ts'
 
 export type Decision = 'follow_up' | 'next_question' | 'end'
@@ -17,17 +19,56 @@ export interface InterviewContextV2 {
   currentQuestionExpectedPoints?: string
 }
 
+const PERSONA_DIR = join(SKILLS_BASE_DIR, 'interviewer-persona')
+
+// 按当前状态精选要加载的 reference,而不是把整张 skill 目录灌给模型
+function selectPersonaReferences(state: InterviewState): string[] {
+  switch (state) {
+    case 'PROJECT_SINGLE_1':
+    case 'PROJECT_SINGLE_2':
+    case 'PROJECT_CROSS':
+      return ['behavioral-round.md', 'follow-up-questions.md']
+    case 'QNA_TECH':
+    case 'QNA_ALGO':
+      return ['technical-round.md']
+    case 'QNA_SCENE':
+      return ['system-design-round.md']
+    case 'SELF_INTRO':
+      return ['follow-up-questions.md']
+    default:
+      return []
+  }
+}
+
+function stripFrontmatter(content: string): string {
+  const match = content.match(/^---\n[\s\S]*?\n---\n([\s\S]*)$/)
+  if (!match) return content.trim()
+  const body = match[1] ?? ''
+  return body.trim()
+}
+
+async function loadPersonaPrompt(state: InterviewState): Promise<string> {
+  const skillRaw = await readFile(join(PERSONA_DIR, 'SKILL.md'), 'utf-8')
+  const skillBody = stripFrontmatter(skillRaw)
+
+  const refs = selectPersonaReferences(state)
+  const refParts: string[] = []
+  for (const ref of refs) {
+    const raw = await readFile(join(PERSONA_DIR, 'references', ref), 'utf-8')
+    refParts.push(`--- Reference: references/${ref} ---\n\n${stripFrontmatter(raw)}`)
+  }
+
+  return ['--- Skill: interviewer-persona ---', '', skillBody, '', ...refParts].join('\n')
+}
+
 export async function askInterviewerV2(
   ctx: InterviewContextV2,
-  opts?: { personaName?: string },
 ): Promise<InterviewerReply> {
-  const personaName = opts?.personaName ?? 'interviewer-persona'
-
-  const persona = await loadSkill(personaName)
+  const personaPrompt = await loadPersonaPrompt(ctx.state)
   const dynamicPrompt = renderSystemPrompt(ctx.state, ctx.stateContext)
 
   const systemPrompt = [
-    persona.systemPrompt,
+    personaPrompt,
     '',
     '--- 面试上下文 ---',
     '',

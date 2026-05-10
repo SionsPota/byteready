@@ -87,5 +87,9 @@ export const createFullReviewRepository = (db: DatabaseSync) => {
     getById: (id: string): FullReviewRow | null => {
       return db.prepare('SELECT * FROM full_reviews WHERE id = ?').get(id) as FullReviewRow | undefined ?? null
     },
+
+    deleteBySession: (sessionId: string): void => {
+      db.prepare('DELETE FROM full_reviews WHERE session_id = ?').run(sessionId)
+    },
   }
 }

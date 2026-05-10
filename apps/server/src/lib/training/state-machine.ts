@@ -241,8 +241,13 @@ export function renderSystemPrompt(state: InterviewState, ctx: StateContext): st
   prompt += `1. 当前阶段已追问 ${ctx.followUpCount} 轮，限制 ${STATE_FOLLOWUP_LIMITS[state]} 轮\n`
   prompt += `2. 候选人答得深 → 进一步技术追问；答得浅 → 引导补充\n`
   prompt += `3. 不要照本宣科，做"压力测试"型追问\n`
-  prompt += `4. 用中文，中英技术术语保持英文原词\n`
-  prompt += `5. 到达轮次限制时给出过渡语，引导到下一阶段\n`
+  prompt += `4. 到达轮次限制时给出过渡语，引导到下一阶段\n`
+
+  prompt += `\n## 输出风格（硬约束）\n`
+  prompt += `- 每条 reply 不超过 2 句、不超过 60 个汉字；不寒暄、不复述候选人的话、不做总结\n`
+  prompt += `- 使用平实口语化中文；只在指代具体技术产品 / 协议 / 计量名词时保留英文原词（如 Redis、Kafka、HTTP、QPS、TCP、JVM 等工业术语）\n`
+  prompt += `- 禁用英文方法论 / 思维框架词（如 Bayesian、Probability Mindset、Anti-Pattern、Depth Probe、Counterfactual、Lateral Jump、Ownership 等），需要表达时改用中文\n`
+  prompt += `- references 中 ">" 引文是给面试官学风格用的，不要原样复述，按候选人当下答案重新组织语言\n`
 
   return prompt
 }

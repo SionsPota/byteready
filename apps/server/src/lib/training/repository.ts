@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 
 export type TrainingType = 'full' | 'self_intro' | 'project_qa' | 'random_qa'
 export type TrainingStatus = 'pending' | 'running' | 'ended'
+export type ReviewStatus = 'idle' | 'generating' | 'ready' | 'partial' | 'failed'
 export type TrainingState =
   | 'IDLE'
   | 'SELF_INTRO'
@@ -21,7 +22,6 @@ export interface TrainingSessionRow {
   position: string
   target_company: string | null
   job_description: string | null
-  persona_id: string | null
   resume_id: string | null
   project_ids: string | null
   status: string
@@ -35,6 +35,11 @@ export interface TrainingSessionRow {
   current_topic: string | null
   started_at: number | null
   ended_at: number | null
+  review_status: string
+  review_progress: string | null
+  review_error: string | null
+  review_started_at: number | null
+  review_finished_at: number | null
   created_at: number
 }
 
@@ -57,10 +62,9 @@ export interface TrainingTurnRow {
 export interface CreateSessionInput {
   ownerId: string
   type?: TrainingType
-  position: string
+  position?: string
   targetCompany?: string
   jobDescription?: string
-  personaId?: string
   resumeId?: string
   projectIds?: string[]
   parentSessionId?: string
@@ -90,6 +94,14 @@ export interface UpdateStateInput {
   contextSummary?: Record<string, unknown>
 }
 
+export interface UpdateReviewStatusInput {
+  status?: ReviewStatus
+  progress?: string | null
+  error?: string | null
+  startedAt?: number | null
+  finishedAt?: number | null
+}
+
 export const createTrainingRepository = (db: DatabaseSync) => {
   return {
     createSession: (input: CreateSessionInput): TrainingSessionRow => {
@@ -97,26 +109,29 @@ export const createTrainingRepository = (db: DatabaseSync) => {
       const now = Date.now()
       db.prepare(
         `INSERT INTO training_sessions (
-          id, owner_id, type, position, target_company, job_description, persona_id,
+          id, owner_id, type, position, target_company, job_description,
           resume_id, project_ids, status, parent_session_id, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       ).run(
-        id, input.ownerId, input.type ?? 'full', input.position,
-        input.targetCompany ?? null, input.jobDescription ?? null, input.personaId ?? null,
+        id, input.ownerId, input.type ?? 'full', input.position ?? '',
+        input.targetCompany ?? null, input.jobDescription ?? null,
         input.resumeId ?? null, input.projectIds ? JSON.stringify(input.projectIds) : null,
         'pending', input.parentSessionId ?? null, now
       )
 
       return {
         id, owner_id: input.ownerId, type: input.type ?? 'full',
-        position: input.position, target_company: input.targetCompany ?? null,
-        job_description: input.jobDescription ?? null, persona_id: input.personaId ?? null,
+        position: input.position ?? '', target_company: input.targetCompany ?? null,
+        job_description: input.jobDescription ?? null,
         resume_id: input.resumeId ?? null, project_ids: input.projectIds ? JSON.stringify(input.projectIds) : null,
         status: 'pending', current_state: null, current_phase: null,
         context_summary: null, parent_session_id: input.parentSessionId ?? null,
         projects_discussed: null, topics_covered: null,
         current_project_id: null, current_topic: null,
-        started_at: null, ended_at: null, created_at: now,
+        started_at: null, ended_at: null,
+        review_status: 'idle', review_progress: null, review_error: null,
+        review_started_at: null, review_finished_at: null,
+        created_at: now,
       }
     },
 
@@ -153,6 +168,22 @@ export const createTrainingRepository = (db: DatabaseSync) => {
       if (input.currentProjectId !== undefined) { sets.push('current_project_id = ?'); values.push(input.currentProjectId) }
       if (input.currentTopic !== undefined) { sets.push('current_topic = ?'); values.push(input.currentTopic) }
       if (input.contextSummary !== undefined) { sets.push('context_summary = ?'); values.push(JSON.stringify(input.contextSummary)) }
+
+      if (sets.length === 0) return
+
+      values.push(id)
+      db.prepare(`UPDATE training_sessions SET ${sets.join(', ')} WHERE id = ?`).run(...values)
+    },
+
+    updateReviewStatus: (id: string, input: UpdateReviewStatusInput): void => {
+      const sets: string[] = []
+      const values: (string | number | null)[] = []
+
+      if (input.status !== undefined) { sets.push('review_status = ?'); values.push(input.status) }
+      if (input.progress !== undefined) { sets.push('review_progress = ?'); values.push(input.progress) }
+      if (input.error !== undefined) { sets.push('review_error = ?'); values.push(input.error) }
+      if (input.startedAt !== undefined) { sets.push('review_started_at = ?'); values.push(input.startedAt) }
+      if (input.finishedAt !== undefined) { sets.push('review_finished_at = ?'); values.push(input.finishedAt) }
 
       if (sets.length === 0) return
 

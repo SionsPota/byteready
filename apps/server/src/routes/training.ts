@@ -17,12 +17,8 @@ import {
   type ProjectBrief,
   type TrainingType,
 } from '../lib/training/state-machine.ts'
-import { triggerReview } from './reviews.ts'
-import { createTrendRepository } from '../lib/trends/repository.ts'
-import { createReviewRepository } from '../lib/reviews/repository.ts'
 import { createPhaseReviewRepository } from '../lib/phase-reviews/repository.ts'
 import { createFullReviewRepository } from '../lib/full-reviews/repository.ts'
-import { createV3TrendRepository } from '../lib/trends/repository-v3.ts'
 import { generatePhaseReview } from '../lib/reviews/phase-generator.ts'
 import { generateFullReview } from '../lib/reviews/full-generator.ts'
 
@@ -33,10 +29,8 @@ const getTrainingRepo = () => createTrainingRepository(getDb())
 const getQuestionRepo = () => createQuestionRepository(getDb())
 const getResumeRepo = () => createResumeRepository(getDb())
 const getProjectRepo = () => createProjectRepository(getDb())
-const getTrendRepo = () => createTrendRepository(getDb())
 const getPhaseReviewRepo = () => createPhaseReviewRepository(getDb())
 const getFullReviewRepo = () => createFullReviewRepository(getDb())
-const getV3TrendRepo = () => createV3TrendRepository(getDb())
 
 // GET /api/training - 列表
 trainingRoute.get('/', (c) => {
@@ -48,7 +42,6 @@ trainingRoute.get('/', (c) => {
     position: r.position,
     targetCompany: r.target_company,
     jobDescription: r.job_description,
-    personaId: r.persona_id,
     resumeId: r.resume_id,
     projectIds: r.project_ids ? JSON.parse(r.project_ids) : [],
     status: r.status,
@@ -77,7 +70,7 @@ trainingRoute.post('/', async (c) => {
     return c.json(err('VALIDATION', messages), 400)
   }
 
-  const { type, position, target_company, job_description, persona_id, resume_id, project_ids } = parsed.data
+  const { type, position, target_company, job_description, resume_id, project_ids } = parsed.data
 
   if (resume_id) {
     const resume = getResumeRepo().getById(resume_id)
@@ -102,7 +95,6 @@ trainingRoute.post('/', async (c) => {
     position,
     targetCompany: target_company,
     jobDescription: job_description,
-    personaId: persona_id,
     resumeId: resume_id,
     projectIds: project_ids,
   })
@@ -141,6 +133,11 @@ trainingRoute.get('/:id', (c) => {
     currentTopic: row.current_topic,
     startedAt: row.started_at,
     endedAt: row.ended_at,
+    reviewStatus: row.review_status,
+    reviewProgress: row.review_progress,
+    reviewError: row.review_error,
+    reviewStartedAt: row.review_started_at,
+    reviewFinishedAt: row.review_finished_at,
     createdAt: row.created_at,
     turns: row.turns.map((t) => ({
       id: t.id,
@@ -560,6 +557,189 @@ function buildQuestionsText(
     .join('\n')
 }
 
+// ===== 超时工具 =====
+
+const withTimeout = <T>(p: Promise<T>, ms: number, label: string): Promise<T> =>
+  Promise.race([
+    p,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`${label} 超时（${ms / 1000}s）`)), ms),
+    ),
+  ])
+
+// ===== 复盘生成核心逻辑（供 /end 与 /regenerate-review 共用） =====
+
+interface RunReviewGenerationOpts {
+  sessionId: string
+  session: import('../lib/training/repository.ts').TrainingSessionRow & { turns: TrainingTurnRow[] }
+  repo: ReturnType<typeof createTrainingRepository>
+  phaseReviewRepo: ReturnType<typeof createPhaseReviewRepository>
+  fullReviewRepo: ReturnType<typeof createFullReviewRepository>
+  projectRepo: ReturnType<typeof createProjectRepository>
+  questionRepo: ReturnType<typeof createQuestionRepository>
+}
+
+async function runReviewGeneration(opts: RunReviewGenerationOpts): Promise<void> {
+  const { sessionId, session, repo, phaseReviewRepo, fullReviewRepo, projectRepo, questionRepo } = opts
+
+  repo.updateReviewStatus(sessionId, {
+    status: 'generating',
+    startedAt: Date.now(),
+    progress: 'starting',
+    error: null,
+    finishedAt: null,
+  })
+
+  const phaseTurnsMap = groupTurnsByPhaseType(session.turns)
+  const phaseTypes = resolvePhaseTypes(session.type ?? 'full')
+
+  const phaseResults: Array<{
+    phaseType: string
+    phaseIndex: number
+    result: import('../lib/reviews/phase-generator.ts').PhaseReviewResult
+    reviewId: string
+  }> = []
+  const failedPhaseErrors: Array<{ phaseType: string; error: string }> = []
+
+  for (const [i, phaseType] of phaseTypes.entries()) {
+    const phaseTurns = phaseTurnsMap.get(phaseType) ?? []
+    if (phaseTurns.length === 0) continue
+
+    repo.updateReviewStatus(sessionId, {
+      progress: `phase ${i + 1}/${phaseTypes.length}: ${phaseType}`,
+    })
+
+    let projectInfo: string | undefined
+    let questions: string | undefined
+
+    if (phaseType === 'project_qa') {
+      projectInfo = buildProjectInfoText(phaseTurns, projectRepo)
+    }
+    if (phaseType === 'random_qa') {
+      questions = buildQuestionsText(phaseTurns, questionRepo)
+    }
+
+    const firstTurn = phaseTurns[0]!
+    const lastTurn = phaseTurns[phaseTurns.length - 1]!
+    const elapsedMinutes = Math.max(1, Math.floor((lastTurn.created_at - firstTurn.created_at) / 60000))
+
+    try {
+      const result = await withTimeout(
+        generatePhaseReview({
+          phaseType,
+          phaseIndex: i,
+          position: session.position,
+          targetCompany: session.target_company ?? undefined,
+          jobDescription: session.job_description ?? undefined,
+          turns: phaseTurns.map((t) => ({ kind: t.kind, text: t.text, index: t.index })),
+          projectInfo,
+          questions,
+          elapsedMinutes,
+        }),
+        60_000,
+        '阶段复盘',
+      )
+
+      const phaseReview = phaseReviewRepo.create({
+        sessionId,
+        phaseType,
+        phaseIndex: i,
+        scores: result.scores,
+        totalScore: result.totalScore,
+        evaluation: result.evaluation,
+        interviewerReflection: result.interviewerReflection,
+        improvementSuggestions: result.improvementSuggestions,
+        rubricVersion: 'v3-phase',
+        coachVersion: phaseType === 'self_intro' ? 'introduction-coach' : 'interview-coach',
+      })
+
+      phaseResults.push({ phaseType, phaseIndex: i, result, reviewId: phaseReview.id })
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      console.error(`[training:review] 阶段 ${phaseType} 生成失败:`, msg)
+      failedPhaseErrors.push({ phaseType, error: msg })
+    }
+  }
+
+  // 整面复盘
+  if (session.type === 'full' && phaseResults.length > 0) {
+    repo.updateReviewStatus(sessionId, { progress: 'full review' })
+    try {
+      const elapsedMinutes = session.started_at
+        ? Math.floor((Date.now() - session.started_at) / 60000)
+        : 0
+
+      const fullReviewResult = await withTimeout(
+        generateFullReview({
+          position: session.position,
+          targetCompany: session.target_company ?? undefined,
+          jobDescription: session.job_description ?? undefined,
+          phaseResults: phaseResults.map((p) => ({
+            phaseType: p.phaseType,
+            phaseIndex: p.phaseIndex,
+            result: p.result,
+          })),
+          sessionInfo: {
+            type: session.type,
+            totalTurns: session.turns.length,
+            elapsedMinutes,
+            trainingType: session.type,
+          },
+        }),
+        90_000,
+        '整面复盘',
+      )
+
+      fullReviewRepo.create({
+        sessionId,
+        phaseReviewIds: phaseResults.map((p) => p.reviewId),
+        phaseScoresSummary: phaseResults.map((p) => ({
+          phaseType: p.phaseType,
+          score: p.result.totalScore,
+          duration: 0,
+        })),
+        coherenceScore: fullReviewResult.coherenceScore,
+        jdMatchScore: fullReviewResult.jdMatchScore,
+        overallPersona: fullReviewResult.overallPersona,
+        consolidatedImprovements: fullReviewResult.consolidatedImprovements,
+        overallEvaluation: fullReviewResult.overallEvaluation,
+        overallScore: fullReviewResult.overallScore,
+      })
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      console.error('[training:review] 整面复盘生成失败:', msg)
+      failedPhaseErrors.push({ phaseType: 'full_review', error: msg })
+    }
+  }
+
+  // 聚合最终状态
+  const finishedAt = Date.now()
+  if (failedPhaseErrors.length === 0 && phaseResults.length > 0) {
+    repo.updateReviewStatus(sessionId, {
+      status: 'ready',
+      progress: null,
+      error: null,
+      finishedAt,
+    })
+  } else if (phaseResults.length === 0 && failedPhaseErrors.length > 0) {
+    const errors = failedPhaseErrors.map((e) => `${e.phaseType}: ${e.error}`).join('; ')
+    repo.updateReviewStatus(sessionId, {
+      status: 'failed',
+      progress: null,
+      error: errors,
+      finishedAt,
+    })
+  } else {
+    const errors = failedPhaseErrors.map((e) => `${e.phaseType}: ${e.error}`).join('; ')
+    repo.updateReviewStatus(sessionId, {
+      status: 'partial',
+      progress: null,
+      error: errors,
+      finishedAt,
+    })
+  }
+}
+
 // POST /api/training/:id/end - 结束
 trainingRoute.post('/:id/end', async (c) => {
   const userId = c.get('userId' as never) as string
@@ -576,173 +756,85 @@ trainingRoute.post('/:id/end', async (c) => {
 
   repo.end(id)
   repo.updateState(id, { currentState: 'END' })
+  repo.updateReviewStatus(id, {
+    status: 'generating',
+    startedAt: Date.now(),
+    progress: 'starting',
+    error: null,
+    finishedAt: null,
+  })
 
   // 触发复盘生成（不阻塞返回）
   void (async () => {
     try {
-      // 1. 兼容 V1/V2 复盘
-      const reviewId = await triggerReview(id)
-
-      const phaseReviewRepo = getPhaseReviewRepo()
-      const fullReviewRepo = getFullReviewRepo()
-      const v3TrendRepo = getV3TrendRepo()
-      const projectRepo = getProjectRepo()
-      const questionRepo = getQuestionRepo()
-
-      // 2. 按 phase 分组 turns
-      const phaseTurnsMap = groupTurnsByPhaseType(session.turns)
-      const phaseTypes = resolvePhaseTypes(session.type ?? 'full')
-
-      // 3. 逐个阶段生成复盘
-      const phaseResults: Array<{
-        phaseType: string
-        phaseIndex: number
-        result: import('../lib/reviews/phase-generator.ts').PhaseReviewResult
-        reviewId: string
-      }> = []
-
-      for (const [i, phaseType] of phaseTypes.entries()) {
-        const phaseTurns = phaseTurnsMap.get(phaseType) ?? []
-        if (phaseTurns.length === 0) continue
-
-        // 准备阶段专属上下文
-        let projectInfo: string | undefined
-        let questions: string | undefined
-
-        if (phaseType === 'project_qa') {
-          projectInfo = buildProjectInfoText(phaseTurns, projectRepo)
-        }
-        if (phaseType === 'random_qa') {
-          questions = buildQuestionsText(phaseTurns, questionRepo)
-        }
-
-        // 计算阶段用时（首回合到最后回合的时间差，分钟）
-        const firstTurn = phaseTurns[0]!
-        const lastTurn = phaseTurns[phaseTurns.length - 1]!
-        const elapsedMinutes = Math.max(1, Math.floor((lastTurn.created_at - firstTurn.created_at) / 60000))
-
-        // 调用 LLM 生成阶段复盘
-        const result = await generatePhaseReview({
-          phaseType,
-          phaseIndex: i,
-          position: session.position,
-          targetCompany: session.target_company ?? undefined,
-          jobDescription: session.job_description ?? undefined,
-          turns: phaseTurns.map((t) => ({
-            kind: t.kind,
-            text: t.text,
-            index: t.index,
-          })),
-          projectInfo,
-          questions,
-          elapsedMinutes,
-        })
-
-        // 保存阶段复盘
-        const phaseReview = phaseReviewRepo.create({
-          sessionId: id,
-          phaseType,
-          phaseIndex: i,
-          scores: result.scores,
-          totalScore: result.totalScore,
-          evaluation: result.evaluation,
-          interviewerReflection: result.interviewerReflection,
-          improvementSuggestions: result.improvementSuggestions,
-          rubricVersion: 'v3-phase',
-          coachVersion: phaseType === 'self_intro' ? 'introduction-coach' : 'interview-coach',
-        })
-
-        phaseResults.push({ phaseType, phaseIndex: i, result, reviewId: phaseReview.id })
-      }
-
-      // 4. 整面复盘（仅 full 类型且有多于一个阶段时）
-      let fullReviewResult: import('../lib/reviews/full-generator.ts').FullReviewResult | null = null
-      if (session.type === 'full' && phaseResults.length > 0) {
-        const elapsedMinutes = session.started_at
-          ? Math.floor((Date.now() - session.started_at) / 60000)
-          : 0
-
-        fullReviewResult = await generateFullReview({
-          position: session.position,
-          targetCompany: session.target_company ?? undefined,
-          jobDescription: session.job_description ?? undefined,
-          phaseResults: phaseResults.map((p) => ({
-            phaseType: p.phaseType,
-            phaseIndex: p.phaseIndex,
-            result: p.result,
-          })),
-          sessionInfo: {
-            type: session.type,
-            totalTurns: session.turns.length,
-            elapsedMinutes,
-            trainingType: session.type,
-          },
-        })
-
-        fullReviewRepo.create({
-          sessionId: id,
-          phaseReviewIds: phaseResults.map((p) => p.reviewId),
-          phaseScoresSummary: phaseResults.map((p) => ({
-            phaseType: p.phaseType,
-            score: p.result.totalScore,
-            duration: 0,
-          })),
-          coherenceScore: fullReviewResult.coherenceScore,
-          jdMatchScore: fullReviewResult.jdMatchScore,
-          overallPersona: fullReviewResult.overallPersona,
-          consolidatedImprovements: fullReviewResult.consolidatedImprovements,
-          overallEvaluation: fullReviewResult.overallEvaluation,
-          overallScore: fullReviewResult.overallScore,
-        })
-      }
-
-      // 5. 写 V3 阶段趋势快照
-      for (const { phaseType, result, reviewId: prid } of phaseResults) {
-        v3TrendRepo.createPhaseSnapshots(
-          userId,
-          id,
-          prid,
-          phaseType,
-          result.scores.map((s) => ({ dimension: s.dimension, score: s.score })),
-        )
-      }
-
-      // 6. 写 V3 整面趋势快照
-      if (fullReviewResult) {
-        // 需要获取 fullReview 的 id，但 create 返回 FullReviewRow
-        const fullRow = fullReviewRepo.getBySessionId(id)
-        if (fullRow) {
-          v3TrendRepo.createFullSnapshots(
-            userId,
-            id,
-            fullRow.id,
-            [
-              { metric: 'overall_score', value: fullReviewResult.overallScore },
-              { metric: 'coherence_score', value: fullReviewResult.coherenceScore },
-              { metric: 'jd_match_score', value: fullReviewResult.jdMatchScore },
-            ],
-          )
-        }
-      }
-
-      // 7. 兼容旧的趋势数据
-      if (reviewId) {
-        const reviewRepo = createReviewRepository(getDb())
-        const report = reviewRepo.getById(reviewId)
-        if (report) {
-          getTrendRepo().createSnapshots(
-            userId,
-            id,
-            report.scores.map((s: { axis: string; value: number }) => ({ axis: s.axis, value: s.value })),
-          )
-        }
-      }
+      await runReviewGeneration({
+        sessionId: id,
+        session,
+        repo,
+        phaseReviewRepo: getPhaseReviewRepo(),
+        fullReviewRepo: getFullReviewRepo(),
+        projectRepo: getProjectRepo(),
+        questionRepo: getQuestionRepo(),
+      })
     } catch (e) {
       console.error('[training:end] 复盘触发失败:', e)
     }
   })()
 
-  return c.json(ok({ id, status: 'ended' }))
+  return c.json(ok({ id, status: 'ended', reviewStatus: 'generating' }))
+})
+
+// POST /api/training/:id/regenerate-review - 重新生成复盘
+trainingRoute.post('/:id/regenerate-review', async (c) => {
+  const userId = c.get('userId' as never) as string
+  const id = c.req.param('id')
+  const repo = getTrainingRepo()
+  const session = repo.getById(id)
+
+  if (!session || session.owner_id !== userId) {
+    return c.json(err('NOT_FOUND', '训练不存在'), 404)
+  }
+  if (session.status !== 'ended') {
+    return c.json(err('CONFLICT', '训练未结束，无法重新生成复盘'), 409)
+  }
+
+  const allowedStatuses: string[] = ['failed', 'partial', 'ready']
+  if (!allowedStatuses.includes(session.review_status)) {
+    return c.json(err('CONFLICT', `当前复盘状态为 ${session.review_status}，无法重新生成`), 409)
+  }
+
+  // 清理旧复盘数据
+  const phaseReviewRepo = getPhaseReviewRepo()
+  const fullReviewRepo = getFullReviewRepo()
+  phaseReviewRepo.deleteBySession(id)
+  fullReviewRepo.deleteBySession(id)
+
+  repo.updateReviewStatus(id, {
+    status: 'generating',
+    startedAt: Date.now(),
+    progress: 'starting',
+    error: null,
+    finishedAt: null,
+  })
+
+  // 触发复盘生成（不阻塞返回）
+  void (async () => {
+    try {
+      await runReviewGeneration({
+        sessionId: id,
+        session,
+        repo,
+        phaseReviewRepo: getPhaseReviewRepo(),
+        fullReviewRepo: getFullReviewRepo(),
+        projectRepo: getProjectRepo(),
+        questionRepo: getQuestionRepo(),
+      })
+    } catch (e) {
+      console.error('[training:regenerate] 复盘重新生成失败:', e)
+    }
+  })()
+
+  return c.json(ok({ id, reviewStatus: 'generating', reviewProgress: 'starting' }))
 })
 
 // GET /api/training/:id/phase-reviews - 阶段复盘列表
@@ -760,9 +852,13 @@ trainingRoute.get('/:id/phase-reviews', (c) => {
     id: r.id,
     phaseType: r.phase_type,
     phaseIndex: r.phase_index,
+    scores: r.scores ? JSON.parse(r.scores) : [],
     totalScore: r.total_score,
     evaluation: r.evaluation,
     interviewerReflection: r.interviewer_reflection,
+    improvementSuggestions: r.improvement_suggestions ? JSON.parse(r.improvement_suggestions) : [],
+    rubricVersion: r.rubric_version,
+    coachVersion: r.coach_version,
     generatedAt: r.generated_at,
   }))))
 })

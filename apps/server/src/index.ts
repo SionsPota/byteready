@@ -1,11 +1,20 @@
 import { serve } from '@hono/node-server'
+import { WebSocketServer } from 'ws'
 import { createApp } from './app.ts'
 import { env } from './env.ts'
+import { attachAsrWS } from './lib/volc/asr.ts'
 
 const app = createApp()
 
 const server = serve({ fetch: app.fetch, port: env.PORT }, (info) => {
   console.log(`[server] running at http://localhost:${info.port}`)
+})
+
+// ASR WebSocket
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const wssAsr = new WebSocketServer({ server: server as any, path: '/api/voice/asr' })
+wssAsr.on('connection', (client) => {
+  attachAsrWS(client)
 })
 
 server.on('error', (error: NodeJS.ErrnoException) => {

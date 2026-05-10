@@ -41,3 +41,14 @@ export const closeDb = (): void => {
   }
   cached = null
 }
+
+export const overrideDb = (db: DatabaseSync): void => {
+  if (cached) {
+    try {
+      cached.close()
+    } catch {
+      // noop
+    }
+  }
+  cached = db
+}

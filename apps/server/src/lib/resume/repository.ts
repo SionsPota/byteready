@@ -8,18 +8,28 @@ export interface ResumeRow {
   raw_text: string
   parsed_at: number | null
   source_format: string
+  contact_name: string | null
+  contact_email: string | null
+  contact_phone: string | null
+  contact_location: string | null
+  summary: string | null
+  educations: string | null
+  experiences: string | null
+  skills: string | null
+  project_ids: string | null
   created_at: number
 }
 
 export interface ResumeProjectRow {
   id: string
-  resume_id: string
+  owner_id: string
   name: string
   period: string | null
   role: string | null
   summary: string | null
   keywords: string | null
-  order: number
+  source: string | null
+  source_resume_id: string | null
   created_at: number
 }
 
@@ -38,24 +48,46 @@ export interface UpdateProjectInput {
   keywords?: string[] | null
 }
 
+export interface UpdateResumeInput {
+  title?: string
+  contact_name?: string | null
+  contact_email?: string | null
+  contact_phone?: string | null
+  contact_location?: string | null
+  summary?: string | null
+  educations?: { school: string; major: string; degree: string; period: string }[] | null
+  experiences?: { company: string; title: string; period: string; description: string }[] | null
+  skills?: { name: string; level?: string }[] | null
+  project_ids?: string[] | null
+}
+
 export const createResumeRepository = (db: DatabaseSync) => {
   return {
     create: (input: CreateResumeInput, projects: { name: string; period?: string; role?: string; summary?: string; keywords?: string[] }[]): ResumeRow => {
       const id = randomUUID()
       const now = Date.now()
 
-      db.prepare('INSERT INTO resumes (id, owner_id, title, raw_text, parsed_at, source_format, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
-        .run(id, input.ownerId, input.title, input.rawText, now, input.sourceFormat, now)
+      db.prepare(
+        'INSERT INTO resumes (id, owner_id, title, raw_text, parsed_at, source_format, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
+      ).run(id, input.ownerId, input.title, input.rawText, now, input.sourceFormat, now)
 
-      let i = 0
+      // 插入 projects 表并收集 id
+      const projectIds: string[] = []
       for (const p of projects) {
+        const pid = randomUUID()
         db.prepare(
-          'INSERT INTO resume_projects (id, resume_id, name, period, role, summary, keywords, "order", created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+          'INSERT INTO projects (id, owner_id, name, period, role, summary, keywords, source, source_resume_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
         ).run(
-          randomUUID(), id, p.name, p.period ?? null, p.role ?? null, p.summary ?? null,
-          p.keywords ? JSON.stringify(p.keywords) : null, i, now
+          pid, input.ownerId, p.name, p.period ?? null, p.role ?? null, p.summary ?? null,
+          p.keywords ? JSON.stringify(p.keywords) : null, 'resume', id, now, now
         )
-        i++
+        projectIds.push(pid)
+      }
+
+      // 更新 resume 的 project_ids
+      if (projectIds.length > 0) {
+        db.prepare('UPDATE resumes SET project_ids = ? WHERE id = ?')
+          .run(JSON.stringify(projectIds), id)
       }
 
       return {
@@ -65,6 +97,15 @@ export const createResumeRepository = (db: DatabaseSync) => {
         raw_text: input.rawText,
         parsed_at: now,
         source_format: input.sourceFormat,
+        contact_name: null,
+        contact_email: null,
+        contact_phone: null,
+        contact_location: null,
+        summary: null,
+        educations: null,
+        experiences: null,
+        skills: null,
+        project_ids: projectIds.length > 0 ? JSON.stringify(projectIds) : null,
         created_at: now,
       }
     },
@@ -78,7 +119,21 @@ export const createResumeRepository = (db: DatabaseSync) => {
       const row = db.prepare('SELECT * FROM resumes WHERE id = ?').get(id) as ResumeRow | undefined
       if (!row) return null
 
-      const projects = db.prepare('SELECT * FROM resume_projects WHERE resume_id = ? ORDER BY "order" ASC').all(id) as unknown as ResumeProjectRow[]
+      // 从 projects 表查询关联项目
+      let projects: ResumeProjectRow[] = []
+      if (row.project_ids) {
+        try {
+          const ids = JSON.parse(row.project_ids) as string[]
+          if (ids.length > 0) {
+            const placeholders = ids.map(() => '?').join(',')
+            projects = db.prepare(
+              `SELECT * FROM projects WHERE id IN (${placeholders}) ORDER BY created_at ASC`
+            ).all(...ids) as unknown as ResumeProjectRow[]
+          }
+        } catch {
+          projects = []
+        }
+      }
       return { ...row, projects }
     },
 
@@ -95,7 +150,56 @@ export const createResumeRepository = (db: DatabaseSync) => {
       if (sets.length === 0) return false
 
       values.push(projectId)
-      db.prepare(`UPDATE resume_projects SET ${sets.join(', ')} WHERE id = ?`).run(...values)
+      db.prepare(`UPDATE projects SET ${sets.join(', ')} WHERE id = ?`).run(...values)
+      return true
+    },
+
+    update: (id: string, patch: UpdateResumeInput): boolean => {
+      const sets: string[] = []
+      const values: (string | null)[] = []
+
+      if (patch.title !== undefined) { sets.push('title = ?'); values.push(patch.title) }
+      if (patch.contact_name !== undefined) { sets.push('contact_name = ?'); values.push(patch.contact_name) }
+      if (patch.contact_email !== undefined) { sets.push('contact_email = ?'); values.push(patch.contact_email) }
+      if (patch.contact_phone !== undefined) { sets.push('contact_phone = ?'); values.push(patch.contact_phone) }
+      if (patch.contact_location !== undefined) { sets.push('contact_location = ?'); values.push(patch.contact_location) }
+      if (patch.summary !== undefined) { sets.push('summary = ?'); values.push(patch.summary) }
+      if (patch.educations !== undefined) { sets.push('educations = ?'); values.push(patch.educations ? JSON.stringify(patch.educations) : null) }
+      if (patch.experiences !== undefined) { sets.push('experiences = ?'); values.push(patch.experiences ? JSON.stringify(patch.experiences) : null) }
+      if (patch.skills !== undefined) { sets.push('skills = ?'); values.push(patch.skills ? JSON.stringify(patch.skills) : null) }
+      if (patch.project_ids !== undefined) { sets.push('project_ids = ?'); values.push(patch.project_ids ? JSON.stringify(patch.project_ids) : null) }
+
+      if (sets.length === 0) return false
+
+      values.push(id)
+      db.prepare(`UPDATE resumes SET ${sets.join(', ')} WHERE id = ?`).run(...values)
+      return true
+    },
+
+    reparse: (id: string, rawText: string, projects: { name: string; period?: string; role?: string; summary?: string; keywords?: string[] }[], ownerId: string): boolean => {
+      const now = Date.now()
+
+      // 删除旧的项目关联
+      db.prepare('UPDATE projects SET source_resume_id = NULL WHERE source_resume_id = ?').run(id)
+
+      // 插入新项目
+      const projectIds: string[] = []
+      for (const p of projects) {
+        const pid = randomUUID()
+        db.prepare(
+          'INSERT INTO projects (id, owner_id, name, period, role, summary, keywords, source, source_resume_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        ).run(
+          pid, ownerId, p.name, p.period ?? null, p.role ?? null, p.summary ?? null,
+          p.keywords ? JSON.stringify(p.keywords) : null, 'resume', id, now, now
+        )
+        projectIds.push(pid)
+      }
+
+      // 更新 resume
+      db.prepare(
+        'UPDATE resumes SET raw_text = ?, parsed_at = ?, project_ids = ? WHERE id = ?'
+      ).run(rawText, now, projectIds.length > 0 ? JSON.stringify(projectIds) : null, id)
+
       return true
     },
 
@@ -105,7 +209,7 @@ export const createResumeRepository = (db: DatabaseSync) => {
     },
 
     getProject: (projectId: string): ResumeProjectRow | null => {
-      const row = db.prepare('SELECT * FROM resume_projects WHERE id = ?').get(projectId) as ResumeProjectRow | undefined
+      const row = db.prepare('SELECT * FROM projects WHERE id = ?').get(projectId) as ResumeProjectRow | undefined
       return row ?? null
     },
   }

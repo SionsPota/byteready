@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { err, ok, resumeCreateSchema, resumeProjectUpdateSchema } from '@byteready/shared'
+import { err, ok, resumeCreateSchema, resumeProjectUpdateSchema, resumeUpdateSchema } from '@byteready/shared'
 import { requireAuth } from '../lib/auth/middleware.ts'
 import { getDb } from '../lib/db/client.ts'
 import { createResumeRepository } from '../lib/resume/repository.ts'
@@ -13,6 +13,12 @@ export const resumesRoute = new Hono()
 resumesRoute.use('*', requireAuth)
 
 const getRepo = () => createResumeRepository(getDb())
+
+// 辅助：安全解析 JSON 字段
+const safeJsonParse = (str: string | null): unknown => {
+  if (!str) return null
+  try { return JSON.parse(str) } catch { return null }
+}
 
 // GET /api/resumes - 列表
 resumesRoute.get('/', (c) => {
@@ -49,7 +55,6 @@ resumesRoute.post('/', async (c) => {
       return c.json(err('VALIDATION', '请上传文件'), 400)
     }
 
-    // 不依赖 instanceof File，直接检查是否有 arrayBuffer 方法
     const fileObj = file as { arrayBuffer(): Promise<ArrayBuffer>; name: string }
     const buffer = new Uint8Array(await fileObj.arrayBuffer())
     const ext = fileObj.name.split('.').pop()?.toLowerCase()
@@ -72,7 +77,6 @@ resumesRoute.post('/', async (c) => {
 
     if (!title) title = fileObj.name.replace(/\.[^.]+$/, '')
   } else {
-    // JSON body (paste)
     let body: unknown
     try {
       body = await c.req.json()
@@ -95,7 +99,7 @@ resumesRoute.post('/', async (c) => {
     return c.json(err('VALIDATION', '简历内容为空'), 400)
   }
 
-  // 大模型优化：清洗/格式化原始文本（PDF/DOCX 提取的文本通常混乱）
+  // 大模型优化
   let optimizedText = rawText
   if (env.KIMI_API_KEY && sourceFormat !== 'paste') {
     try {
@@ -119,7 +123,6 @@ resumesRoute.post('/', async (c) => {
     }
   }
 
-  // 使用优化后的文本落库
   rawText = optimizedText
 
   const repo = getRepo()
@@ -152,6 +155,17 @@ resumesRoute.get('/:id', (c) => {
     sourceFormat: row.source_format,
     parsedAt: row.parsed_at,
     createdAt: row.created_at,
+    contact: {
+      name: row.contact_name,
+      email: row.contact_email,
+      phone: row.contact_phone,
+      location: row.contact_location,
+    },
+    summary: row.summary,
+    educations: safeJsonParse(row.educations),
+    experiences: safeJsonParse(row.experiences),
+    skills: safeJsonParse(row.skills),
+    projectIds: safeJsonParse(row.project_ids),
     projects: row.projects.map((p) => ({
       id: p.id,
       name: p.name,
@@ -159,12 +173,89 @@ resumesRoute.get('/:id', (c) => {
       role: p.role,
       summary: p.summary,
       keywords: p.keywords ? JSON.parse(p.keywords) : [],
-      order: p.order,
+      source: p.source,
     })),
   }))
 })
 
-// PATCH /api/resumes/:id/projects/:pid - 编辑项目
+// PATCH /api/resumes/:id - 编辑
+resumesRoute.patch('/:id', async (c) => {
+  const userId = c.get('userId' as never) as string
+  const id = c.req.param('id')
+  const repo = getRepo()
+
+  const resume = repo.getById(id)
+  if (!resume || resume.owner_id !== userId) {
+    return c.json(err('NOT_FOUND', '简历不存在'), 404)
+  }
+
+  let body: unknown
+  try {
+    body = await c.req.json()
+  } catch {
+    return c.json(err('VALIDATION', '请求体必须是 JSON'), 400)
+  }
+
+  const parsed = resumeUpdateSchema.safeParse(body)
+  if (!parsed.success) {
+    const messages = parsed.error.issues.map((i) => i.message).join('; ')
+    return c.json(err('VALIDATION', messages), 400)
+  }
+
+  const data = parsed.data
+  repo.update(id, {
+    title: data.title,
+    contact_name: data.contact_name,
+    contact_email: data.contact_email,
+    contact_phone: data.contact_phone,
+    contact_location: data.contact_location,
+    summary: data.summary,
+    educations: data.educations,
+    experiences: data.experiences,
+    skills: data.skills,
+    project_ids: data.project_ids,
+  })
+
+  const updated = repo.getById(id)
+  return c.json(ok(updated))
+})
+
+// POST /api/resumes/:id/reparse - 重新解析
+resumesRoute.post('/:id/reparse', async (c) => {
+  const userId = c.get('userId' as never) as string
+  const id = c.req.param('id')
+  const repo = getRepo()
+
+  const resume = repo.getById(id)
+  if (!resume || resume.owner_id !== userId) {
+    return c.json(err('NOT_FOUND', '简历不存在'), 404)
+  }
+
+  const rawText = resume.raw_text
+  if (!rawText.trim()) {
+    return c.json(err('VALIDATION', '简历内容为空，无法解析'), 400)
+  }
+
+  // 重新提取项目
+  let projects: { name: string; period?: string; role?: string; summary?: string; keywords?: string[] }[] = []
+  if (env.KIMI_API_KEY) {
+    try {
+      const extracted = await extractProjectsFromResume(rawText)
+      projects = extracted.projects
+      console.log('[resume-reparse] extracted projects:', projects.length)
+    } catch (e) {
+      console.error('[resume] 重新解析失败:', e)
+      return c.json(err('PARSE_ERROR', '重新解析失败，请稍后重试'), 500)
+    }
+  }
+
+  repo.reparse(id, rawText, projects, userId)
+
+  const updated = repo.getById(id)
+  return c.json(ok(updated))
+})
+
+// PATCH /api/resumes/:id/projects/:pid - 编辑项目（V1 兼容，推荐使用 /api/projects/:id）
 resumesRoute.patch('/:id/projects/:pid', async (c) => {
   const userId = c.get('userId' as never) as string
   const resumeId = c.req.param('id')
@@ -177,7 +268,7 @@ resumesRoute.patch('/:id/projects/:pid', async (c) => {
   }
 
   const project = repo.getProject(projectId)
-  if (!project || project.resume_id !== resumeId) {
+  if (!project || project.source_resume_id !== resumeId) {
     return c.json(err('NOT_FOUND', '项目不存在'), 404)
   }
 
@@ -211,7 +302,7 @@ resumesRoute.patch('/:id/projects/:pid', async (c) => {
     role: updated!.role,
     summary: updated!.summary,
     keywords: updated!.keywords ? JSON.parse(updated!.keywords) : [],
-    order: updated!.order,
+    source: updated!.source,
   }))
 })
 

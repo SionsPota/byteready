@@ -38,9 +38,9 @@ export const createQuestionRepository = (db: DatabaseSync) => {
       return row ?? null
     },
 
-    pickRandom: (opts: { position: string; level: string; limit: number; excludeIds?: string[]; category?: string }) => {
-      const conditions = ['position = ?', 'level = ?']
-      const values: (string | number)[] = [opts.position, opts.level]
+    pickRandom: (opts: { position: string; limit: number; excludeIds?: string[]; category?: string }) => {
+      const conditions = ['position = ?']
+      const values: (string | number)[] = [opts.position]
       if (opts.category) { conditions.push('category = ?'); values.push(opts.category) }
 
       const exclude = opts.excludeIds?.length

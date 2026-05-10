@@ -7,7 +7,13 @@
     "dev": "node --disable-warning=ExperimentalWarning --watch src/index.ts",
     "start": "node --disable-warning=ExperimentalWarning src/index.ts",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "seed:demo": "node --disable-warning=ExperimentalWarning src/scripts/seed-demo.ts",
+    "replay:demo": "node --disable-warning=ExperimentalWarning src/scripts/replay-demo.ts",
+    "replay:demo:interactive": "node --disable-warning=ExperimentalWarning src/scripts/replay-demo-interactive.ts",
+    "interactive:demo": "node --disable-warning=ExperimentalWarning src/scripts/interactive-demo.ts",
+    "auto:replay:all": "node --disable-warning=ExperimentalWarning src/scripts/auto-replay-all.ts",
+    "cleanup:demo": "node --disable-warning=ExperimentalWarning src/scripts/cleanup-demo-sessions.ts"
   },
   "dependencies": {
     "@byteready/shared": "workspace:*",

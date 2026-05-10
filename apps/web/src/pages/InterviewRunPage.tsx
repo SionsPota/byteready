@@ -1,36 +1,7 @@
 import { useEffect, useMemo, useState, useRef, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { Send, Square, SkipForward, Mic, Volume2, VolumeX, Radio, Play } from 'lucide-react'
-
-// SpeechRecognition API 类型声明（浏览器内置）
-interface SpeechRecognition extends EventTarget {
-  lang: string
-  continuous: boolean
-  interimResults: boolean
-  onstart: (() => void) | null
-  onresult: ((event: SpeechRecognitionEvent) => void) | null
-  onerror: ((event: SpeechRecognitionErrorEvent) => void) | null
-  onend: (() => void) | null
-  start(): void
-  stop(): void
-  abort(): void
-}
-
-interface SpeechRecognitionEvent extends Event {
-  resultIndex: number
-  results: SpeechRecognitionResultList
-}
-
-interface SpeechRecognitionErrorEvent extends Event {
-  error: string
-}
-
-declare global {
-  interface Window {
-    SpeechRecognition: new () => SpeechRecognition
-    webkitSpeechRecognition: new () => SpeechRecognition
-  }
-}
+import { useVolcAsr } from '../hooks/useVolcAsr.ts'
 
 interface Turn {
   id: string
@@ -103,11 +74,41 @@ export function InterviewRunPage() {
   const [streamingTurnId, setStreamingTurnId] = useState<string | null>(null)
   const [streamingProgress, setStreamingProgress] = useState(0)
   const scrollRef = useRef<HTMLDivElement>(null)
-  const recognitionRef = useRef<SpeechRecognition | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const submitAnswerRef = useRef<(text?: string) => Promise<void>>(async () => {})
 
-  // 检查浏览器是否支持语音识别
-  const hasSpeechRecognition = 'SpeechRecognition' in window || 'webkitSpeechRecognition' in window
+  // 麦克风可用性：getUserMedia 只在 https / localhost 下可用
+  const hasMic =
+    typeof navigator !== 'undefined' &&
+    !!navigator.mediaDevices &&
+    typeof navigator.mediaDevices.getUserMedia === 'function'
+
+  const asr = useVolcAsr({
+    onAutoEnd: (text) => {
+      // 自动结束：直接提交，跳过确认
+      const trimmed = text.trim()
+      if (trimmed) {
+        void submitAnswerRef.current(trimmed)
+      } else {
+        setVoiceState('idle')
+      }
+    },
+    onComplete: (text) => {
+      // 手动停止：进入确认状态
+      const trimmed = text.trim()
+      if (trimmed) {
+        setAnswer(trimmed)
+        setVoiceState('confirming')
+      } else {
+        setVoiceState('idle')
+      }
+    },
+    onError: (msg) => {
+      setVoiceError(msg)
+      setVoiceState('idle')
+    },
+  })
 
   const fetchSession = useCallback(async (): Promise<TrainingDetail | null> => {
     if (!id) return null
@@ -158,6 +159,19 @@ export function InterviewRunPage() {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight
     }
   }, [displayedTurns, loading, voiceState, streamingProgress])
+
+  // 面试官回复结束（voiceState 回到 idle）后，把光标自动落到输入框，
+  // 让用户能立刻继续作答；进入页面但还没"开始面试"时不抢焦点。
+  useEffect(() => {
+    if (
+      voiceState === 'idle' &&
+      started &&
+      !loading &&
+      session?.status !== 'ended'
+    ) {
+      inputRef.current?.focus()
+    }
+  }, [voiceState, started, loading, session?.status])
 
   // TTS 提速：火山 speech_rate 单位为 1%，正数加速。15 ≈ 比标准快 15%
   const TTS_SPEECH_RATE = 15
@@ -325,74 +339,25 @@ export function InterviewRunPage() {
     await fetchSession()
     setOptimisticTurns([])
   }
+  submitAnswerRef.current = handleAnswer
 
-  const startRecording = () => {
-    if (!hasSpeechRecognition) {
-      setVoiceError('当前浏览器不支持语音识别，请使用文本输入')
+  const startRecording = async () => {
+    if (!hasMic) {
+      setVoiceError('当前环境无法访问麦克风（需要 https 或 localhost）')
       return
     }
     setVoiceError(null)
-
-    const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition
-    const recognition = new SpeechRecognitionAPI()
-    recognition.lang = 'zh-CN'
-    recognition.continuous = false
-    recognition.interimResults = true
-
-    recognition.onstart = () => {
-      setVoiceState('recording')
-      setAnswer('')
-    }
-
-    recognition.onresult = (event: SpeechRecognitionEvent) => {
-      let finalTranscript = ''
-      let interimTranscript = ''
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const result = event.results.item(i)
-        if (!result || result.length === 0) continue
-        const item = result.item(0)
-        if (!item) continue
-        const transcript = item.transcript
-        if (result.isFinal) {
-          finalTranscript += transcript
-        } else {
-          interimTranscript += transcript
-        }
-      }
-      if (finalTranscript) {
-        setAnswer((prev) => prev + finalTranscript)
-      } else if (interimTranscript) {
-        setAnswer((prev) => {
-          // 替换之前的 interim 结果
-          const base = prev.replace(/…$/, '')
-          return base + interimTranscript + '…'
-        })
-      }
-    }
-
-    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-      if (event.error !== 'aborted') {
-        setVoiceError(`语音识别错误: ${event.error}`)
-      }
-      setVoiceState('idle')
-    }
-
-    recognition.onend = () => {
-      setVoiceState('confirming')
-      // 清理末尾的省略号
-      setAnswer((prev) => prev.replace(/…$/, '').trim())
-    }
-
-    recognitionRef.current = recognition
-    recognition.start()
+    setAnswer('')
+    setVoiceState('recording')
+    await asr.start()
   }
 
   const stopRecording = () => {
-    recognitionRef.current?.stop()
+    asr.stop()
   }
 
   const handleEnd = async () => {
-    if (!confirm('确定结束训练？结束后将生成复盘报告。')) return
+    if (!confirm('确定结束模拟？结束后将生成复盘报告。')) return
     if (!id) return
     await fetch(`/api/training/${id}/end`, {
       method: 'POST',
@@ -573,25 +538,58 @@ export function InterviewRunPage() {
       {canAnswer && (
         <div className="mt-4 pt-4 border-t border-slate-800/60">
           {voiceState === 'recording' ? (
-            /* 录音中状态 */
-            <div className="flex items-center justify-center gap-4 py-4">
-              <div className="flex items-center gap-3 px-5 py-3 rounded-full bg-red-950/60 border border-red-800/50">
-                <span className="relative flex h-3 w-3">
+            /* 录音中：音量条 + 静默倒计时 + 实时识别预览 */
+            <div className="space-y-3 py-3">
+              <div className="flex items-center gap-3">
+                <span className="relative flex h-3 w-3 flex-shrink-0">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
                 </span>
-                <span className="text-sm text-red-400 font-medium">正在聆听...</span>
+                <span className="text-sm text-red-400 font-medium flex-shrink-0">正在聆听</span>
+                <div className="flex-1 h-1.5 bg-slate-800 rounded-full overflow-hidden min-w-[80px]">
+                  <div
+                    className="h-full rounded-full transition-all duration-150"
+                    style={{
+                      width: `${Math.round(asr.volume * 100)}%`,
+                      backgroundColor:
+                        asr.volume < 0.1 ? '#ef4444' : asr.volume < 0.3 ? '#eab308' : '#22c55e',
+                    }}
+                  />
+                </div>
+                <span className="text-[10px] text-slate-500 font-mono w-8 text-right flex-shrink-0">
+                  {Math.round(asr.volume * 100)}%
+                </span>
+                <button onClick={stopRecording} className="btn-secondary text-sm flex-shrink-0">
+                  停止
+                </button>
               </div>
-              <button
-                onClick={stopRecording}
-                className="btn-secondary text-sm"
-              >
-                停止录音
-              </button>
+              {asr.countdown !== null && asr.countdown > 0 && (
+                <div className="text-xs text-amber-400 animate-pulse">
+                  未检测到声音，{asr.countdown} 秒后自动结束…
+                </div>
+              )}
+              {asr.transcript && (
+                <div className="px-3 py-2 rounded-lg bg-slate-900/80 border border-slate-800 text-sm leading-relaxed">
+                  <span className="text-slate-200">{asr.finalText}</span>
+                  <span className="text-slate-500 italic">
+                    {asr.transcript.slice(asr.finalText.length)}
+                  </span>
+                </div>
+              )}
+              {!asr.transcript && (
+                <div className="text-xs text-slate-500">
+                  开始说话，识别结果会实时显示在这里。静默 8 秒将自动结束。
+                </div>
+              )}
             </div>
           ) : voiceState === 'confirming' ? (
             /* 确认识别结果状态 */
             <div className="space-y-3">
+              {asr.endReason && (
+                <div className="text-xs text-amber-400 bg-amber-950/30 border border-amber-900/50 rounded px-2 py-1">
+                  {asr.endReason}
+                </div>
+              )}
               <p className="text-xs text-slate-500">语音识别结果（可编辑确认）：</p>
               <textarea
                 value={answer}
@@ -619,6 +617,7 @@ export function InterviewRunPage() {
             /* 正常输入状态 */
             <div className="flex gap-2">
               <input
+                ref={inputRef}
                 type="text"
                 value={answer}
                 onChange={(e) => setAnswer(e.target.value)}
@@ -626,9 +625,9 @@ export function InterviewRunPage() {
                 placeholder="输入你的回答，或点击麦克风语音输入..."
                 className="input-field flex-1 px-4 py-2.5"
               />
-              {hasSpeechRecognition && (
+              {hasMic && (
                 <button
-                  onClick={startRecording}
+                  onClick={() => void startRecording()}
                   className="p-2.5 rounded-lg bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-emerald-400 transition-colors border border-slate-700/50"
                   title="语音输入"
                 >

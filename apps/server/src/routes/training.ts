@@ -347,8 +347,13 @@ trainingRoute.post('/:id/answer', async (c) => {
     }
   }
 
-  // 如果是状态转换且有过渡语，直接返回过渡语
-  if (transitionMessage) {
+  // 状态转换处理:
+  // - 进入 PROJECT_SINGLE_1/2:不写过渡语、不输出项目列表;把 currentProject 同步到状态机刚选定的项目,
+  //   fall through 到下面的 LLM 调用,让面试官针对该项目自然提问。
+  // - 其他转换(PROJECT_CROSS / QNA_*):保留过渡语作为分段提示,直接 early return,下一轮再走 LLM。
+  const isProjectSingleEntry = transitionMessage && (nextState === 'PROJECT_SINGLE_1' || nextState === 'PROJECT_SINGLE_2')
+
+  if (transitionMessage && !isProjectSingleEntry) {
     const replyIdx = nextIdx + 1
     repo.createTurn({
       sessionId: id,
@@ -356,32 +361,12 @@ trainingRoute.post('/:id/answer', async (c) => {
       kind: 'interviewer_main',
       text: transitionMessage,
       questionId,
-      phase: 'self_intro',
+      phase: nextState === 'PROJECT_CROSS'
+        ? 'project_cross'
+        : nextState.startsWith('QNA_') ? 'q_and_a' : 'self_intro',
       state: nextState,
       topic: nextState.startsWith('QNA_') ? STATE_TOPIC_MAP[nextState] : undefined,
     })
-
-    // 如果下一状态是项目阶段，添加项目选择提示
-    if (nextState === 'PROJECT_SINGLE_1') {
-      const projectList = availableProjects.map((p) => `- ${p.name}`).join('\n')
-      const projectPrompt = `请介绍一下你的项目经历，我们先从你最有代表性的项目开始。\n\n你的项目列表：\n${projectList}`
-      const promptIdx = replyIdx + 1
-      repo.createTurn({
-        sessionId: id,
-        index: promptIdx,
-        kind: 'interviewer_main',
-        text: projectPrompt,
-        phase: 'project_single',
-        state: nextState,
-      })
-
-      return c.json(ok({
-        reply: transitionMessage + '\n' + projectPrompt,
-        decision: 'next_question',
-        turnIndex: promptIdx,
-        state: nextState,
-      }))
-    }
 
     return c.json(ok({
       reply: transitionMessage,
@@ -391,8 +376,18 @@ trainingRoute.post('/:id/answer', async (c) => {
     }))
   }
 
+  if (isProjectSingleEntry) {
+    // 状态机已在前面 stateUpdate 时把 nextProject push 到 projectsDiscussed 末尾
+    const latestProjectId = projectsDiscussed[projectsDiscussed.length - 1]
+    if (latestProjectId) {
+      currentProject = availableProjects.find((p) => p.id === latestProjectId) ?? currentProject
+    }
+  }
+
   // SELF_INTRO 阶段不调用 LLM，直接过渡（但受训练类型限制）
-  if (currentState === 'SELF_INTRO') {
+  // 注:full 类型走 SELF_INTRO → PROJECT_SINGLE_1 时,转换已在上面 isProjectSingleEntry 分支处理过,
+  // 这里只剩 self_intro 训练类型走到 END 的兜底路径。
+  if (currentState === 'SELF_INTRO' && !isProjectSingleEntry) {
     const replyIdx = nextIdx + 1
     const nextIntroState = getNextState('SELF_INTRO', { type: trainingType })
 
@@ -441,8 +436,10 @@ trainingRoute.post('/:id/answer', async (c) => {
   }
 
   // 调用 V2 面试官 LLM
+  // 注:用 nextState 而非 currentState,这样 PROJECT_SINGLE_1/2 进入分支(fall through 到这里)
+  // 能让 LLM 在新状态上下文下针对 currentProject 提问;无状态转换时 nextState===currentState。
   const reply = await askInterviewerV2({
-    state: currentState,
+    state: nextState,
     stateContext: {
       position: session.position,
       targetCompany: session.target_company ?? undefined,
@@ -457,7 +454,7 @@ trainingRoute.post('/:id/answer', async (c) => {
         ? availableProjects.filter((p) => projectsDiscussed.includes(p.id)).slice(0, 2)
         : undefined,
       topicsCovered: session.topics_covered ? JSON.parse(session.topics_covered) : [],
-      currentTopic: STATE_TOPIC_MAP[currentState],
+      currentTopic: STATE_TOPIC_MAP[nextState],
       followUpCount,
     },
     previousTurns: session.turns.map((t) => ({ kind: t.kind, text: t.text })),
@@ -473,17 +470,17 @@ trainingRoute.post('/:id/answer', async (c) => {
     kind,
     text: reply.reply,
     questionId,
-    phase: currentState.startsWith('QNA_') ? 'q_and_a' : currentState.startsWith('PROJECT_') ? 'project_single' : 'self_intro',
-    state: currentState,
+    phase: nextState.startsWith('QNA_') ? 'q_and_a' : nextState.startsWith('PROJECT_') ? 'project_single' : 'self_intro',
+    state: nextState,
     projectId: currentProject?.id,
-    topic: STATE_TOPIC_MAP[currentState],
+    topic: STATE_TOPIC_MAP[nextState],
   })
 
   return c.json(ok({
     reply: reply.reply,
     decision: reply.decision,
     turnIndex: replyIdx,
-    state: currentState,
+    state: nextState,
   }))
 })
 

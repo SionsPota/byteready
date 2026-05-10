@@ -237,7 +237,7 @@ export function ReviewPage() {
   }
 
   const renderTurnKind = (kind: string) => {
-    const config = TURN_KIND_CONFIG[kind] || TURN_KIND_CONFIG.system
+    const config = (TURN_KIND_CONFIG[kind] || TURN_KIND_CONFIG.system)!
     const Icon = config.icon
     return (
       <span className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-md border ${config.cls}`}>
@@ -255,7 +255,7 @@ export function ReviewPage() {
   if (!training) return <p className="text-slate-500">训练记录不存在</p>
 
   const isFullInterview = training.type === 'full'
-  const phaseCfg = PHASE_CONFIG[training.type] || PHASE_CONFIG.random_qa
+  const phaseCfg = (PHASE_CONFIG[training.type] || PHASE_CONFIG.random_qa)!
 
   return (
     <div className="animate-fade-in space-y-6">
@@ -427,7 +427,7 @@ export function ReviewPage() {
           ) : (
             phaseReviews.map((pr) => {
               const phaseTurns = getTurnsForPhase(pr.phaseType)
-              const cfg = PHASE_CONFIG[pr.phaseType] || PHASE_CONFIG.random_qa
+              const cfg = (PHASE_CONFIG[pr.phaseType] || PHASE_CONFIG.random_qa)!
               const isExpanded = expandedPhases.has(pr.id)
               return (
                 <div key={pr.id} className={`card overflow-hidden ${isExpanded ? 'ring-1 ring-slate-700/50' : ''}`}>
@@ -524,7 +524,7 @@ export function ReviewPage() {
                             </div>
                             <div className="space-y-2 pl-6">
                               {pr.improvementSuggestions.map((imp, i) => {
-                                const pcfg = PRIORITY_CONFIG[imp.priority] || PRIORITY_CONFIG.low
+                                const pcfg = (PRIORITY_CONFIG[imp.priority] || PRIORITY_CONFIG.low)!
                                 return (
                                   <div key={i} className="flex items-start gap-2.5">
                                     <span className={`text-[10px] px-2 py-0.5 rounded-md border shrink-0 mt-0.5 flex items-center gap-1 ${pcfg.cls}`}>
@@ -634,7 +634,7 @@ export function ReviewPage() {
               </div>
               <div className="space-y-3">
                 {fullReview.consolidatedImprovements.map((imp, i) => {
-                  const pcfg = PRIORITY_CONFIG[imp.priority] || PRIORITY_CONFIG.low
+                  const pcfg = (PRIORITY_CONFIG[imp.priority] || PRIORITY_CONFIG.low)!
                   return (
                     <div key={i} className="flex items-start gap-3">
                       <span className={`text-[10px] px-2 py-0.5 rounded-md border shrink-0 mt-0.5 flex items-center gap-1 ${pcfg.cls}`}>

@@ -15,6 +15,7 @@ import { useAuth } from '../contexts/AuthContext'
 
 interface TrainingSummary {
   id: string
+  type: string
   position: string
   status: string
   currentState?: string

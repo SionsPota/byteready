@@ -1,9 +1,9 @@
 import { Hono } from 'hono'
-import { err, ok, resumeCreateSchema, resumeProjectUpdateSchema, resumeUpdateSchema } from '@byteready/shared'
+import { err, ok, resumeCreateSchema, projectUpdateSchema, resumeUpdateSchema } from '@byteready/shared'
 import { requireAuth } from '../lib/auth/middleware.ts'
 import { getDb } from '../lib/db/client.ts'
 import { createResumeRepository } from '../lib/resume/repository.ts'
-import { extractProjectsFromResume } from '../lib/resume/extractor.ts'
+import { extractResumeInfo, extractProjectsFromResume } from '../lib/resume/extractor.ts'
 import { optimizeResumeText } from '../lib/resume-optimizer.ts'
 import { extractTextFromPDF } from '../lib/pdf-parser.ts'
 import { convertToHtml } from 'mammoth'
@@ -18,6 +18,10 @@ const getRepo = () => createResumeRepository(getDb())
 const safeJsonParse = (str: string | null): unknown => {
   if (!str) return null
   try { return JSON.parse(str) } catch { return null }
+}
+const safeJsonArray = (str: string | null): unknown[] => {
+  const v = safeJsonParse(str)
+  return Array.isArray(v) ? v : []
 }
 
 // GET /api/resumes - 列表
@@ -111,19 +115,26 @@ resumesRoute.post('/', async (c) => {
     }
   }
 
-  // 提取项目
-  let projects: { name: string; period?: string; role?: string; summary?: string; keywords?: string[] }[] = []
+  // 提取全部结构化信息
+  let parsedData: import('../lib/resume/repository.ts').ParsedResumeData | undefined
   if (env.KIMI_API_KEY) {
     try {
-      const extracted = await extractProjectsFromResume(optimizedText)
-      projects = extracted.projects
-      console.log('[resume-upload] extracted projects:', projects.length)
+      const extracted = await extractResumeInfo(optimizedText)
+      parsedData = extracted
+      console.log('[resume-upload] extracted:', {
+        contact: extracted.contact.name,
+        educations: extracted.educations.length,
+        experiences: extracted.experiences.length,
+        skills: extracted.skills.length,
+        projects: extracted.projects.length,
+      })
     } catch (e) {
-      console.error('[resume] 项目提取失败:', e)
+      console.error('[resume] 简历提取失败:', e)
     }
   }
 
   rawText = optimizedText
+  const projects = parsedData?.projects ?? []
 
   const repo = getRepo()
   const resume = repo.create({
@@ -131,6 +142,7 @@ resumesRoute.post('/', async (c) => {
     title,
     rawText,
     sourceFormat,
+    parsedData,
   }, projects)
 
   const detail = repo.getById(resume.id)
@@ -162,10 +174,10 @@ resumesRoute.get('/:id', (c) => {
       location: row.contact_location,
     },
     summary: row.summary,
-    educations: safeJsonParse(row.educations),
-    experiences: safeJsonParse(row.experiences),
-    skills: safeJsonParse(row.skills),
-    projectIds: safeJsonParse(row.project_ids),
+    educations: safeJsonArray(row.educations),
+    experiences: safeJsonArray(row.experiences),
+    skills: safeJsonArray(row.skills),
+    projectIds: safeJsonArray(row.project_ids),
     projects: row.projects.map((p) => ({
       id: p.id,
       name: p.name,
@@ -236,20 +248,27 @@ resumesRoute.post('/:id/reparse', async (c) => {
     return c.json(err('VALIDATION', '简历内容为空，无法解析'), 400)
   }
 
-  // 重新提取项目
-  let projects: { name: string; period?: string; role?: string; summary?: string; keywords?: string[] }[] = []
+  // 重新提取全部结构化信息
+  let parsedData: import('../lib/resume/repository.ts').ParsedResumeData | undefined
   if (env.KIMI_API_KEY) {
     try {
-      const extracted = await extractProjectsFromResume(rawText)
-      projects = extracted.projects
-      console.log('[resume-reparse] extracted projects:', projects.length)
+      const extracted = await extractResumeInfo(rawText)
+      parsedData = extracted
+      console.log('[resume-reparse] extracted:', {
+        contact: extracted.contact.name,
+        educations: extracted.educations.length,
+        experiences: extracted.experiences.length,
+        skills: extracted.skills.length,
+        projects: extracted.projects.length,
+      })
     } catch (e) {
       console.error('[resume] 重新解析失败:', e)
       return c.json(err('PARSE_ERROR', '重新解析失败，请稍后重试'), 500)
     }
   }
 
-  repo.reparse(id, rawText, projects, userId)
+  const projects = parsedData?.projects ?? []
+  repo.reparse(id, rawText, projects, userId, parsedData)
 
   const updated = repo.getById(id)
   return c.json(ok(updated))
@@ -279,7 +298,7 @@ resumesRoute.patch('/:id/projects/:pid', async (c) => {
     return c.json(err('VALIDATION', '请求体必须是 JSON'), 400)
   }
 
-  const parsed = resumeProjectUpdateSchema.safeParse(body)
+  const parsed = projectUpdateSchema.safeParse(body)
   if (!parsed.success) {
     const messages = parsed.error.issues.map((i) => i.message).join('; ')
     return c.json(err('VALIDATION', messages), 400)

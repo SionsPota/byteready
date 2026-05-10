@@ -38,9 +38,11 @@ export const createQuestionRepository = (db: DatabaseSync) => {
       return row ?? null
     },
 
-    pickRandom: (opts: { position: string; limit: number; excludeIds?: string[]; category?: string }) => {
-      const conditions = ['position = ?']
-      const values: (string | number)[] = [opts.position]
+    pickRandom: (opts: { position?: string; limit: number; excludeIds?: string[]; category?: string }) => {
+      const conditions: string[] = []
+      const values: (string | number)[] = []
+
+      if (opts.position) { conditions.push('position = ?'); values.push(opts.position) }
       if (opts.category) { conditions.push('category = ?'); values.push(opts.category) }
 
       const exclude = opts.excludeIds?.length
@@ -48,7 +50,8 @@ export const createQuestionRepository = (db: DatabaseSync) => {
         : ''
       if (opts.excludeIds) values.push(...opts.excludeIds)
 
-      const sql = `SELECT * FROM questions WHERE ${conditions.join(' AND ')} ${exclude} ORDER BY RANDOM() LIMIT ?`
+      const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
+      const sql = `SELECT * FROM questions ${where} ${exclude} ORDER BY RANDOM() LIMIT ?`
       values.push(opts.limit)
       return db.prepare(sql).all(...values) as unknown as QuestionRow[]
     },

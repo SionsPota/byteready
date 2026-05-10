@@ -33,11 +33,21 @@ export interface ResumeProjectRow {
   created_at: number
 }
 
+export interface ParsedResumeData {
+  contact: { name: string | null; email: string | null; phone: string | null; location: string | null }
+  summary: string | null
+  educations: { school: string; major: string; degree: string; period: string }[]
+  experiences: { company: string; title: string; period: string; description: string }[]
+  skills: { name: string; level?: string }[]
+  projects: { name: string; period?: string; role?: string; summary?: string; keywords?: string[] }[]
+}
+
 export interface CreateResumeInput {
   ownerId: string
   title: string
   rawText: string
   sourceFormat: string
+  parsedData?: ParsedResumeData
 }
 
 export interface UpdateProjectInput {
@@ -66,10 +76,28 @@ export const createResumeRepository = (db: DatabaseSync) => {
     create: (input: CreateResumeInput, projects: { name: string; period?: string; role?: string; summary?: string; keywords?: string[] }[]): ResumeRow => {
       const id = randomUUID()
       const now = Date.now()
+      const parsed = input.parsedData
 
+      // 插入 resumes（含全部结构化字段）
       db.prepare(
-        'INSERT INTO resumes (id, owner_id, title, raw_text, parsed_at, source_format, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
-      ).run(id, input.ownerId, input.title, input.rawText, now, input.sourceFormat, now)
+        `INSERT INTO resumes (
+          id, owner_id, title, raw_text, parsed_at, source_format,
+          contact_name, contact_email, contact_phone, contact_location,
+          summary, educations, experiences, skills, project_ids, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run(
+        id, input.ownerId, input.title, input.rawText, now, input.sourceFormat,
+        parsed?.contact.name ?? null,
+        parsed?.contact.email ?? null,
+        parsed?.contact.phone ?? null,
+        parsed?.contact.location ?? null,
+        parsed?.summary ?? null,
+        parsed?.educations.length ? JSON.stringify(parsed.educations) : null,
+        parsed?.experiences.length ? JSON.stringify(parsed.experiences) : null,
+        parsed?.skills.length ? JSON.stringify(parsed.skills) : null,
+        null, // project_ids 在下方更新
+        now
+      )
 
       // 插入 projects 表并收集 id
       const projectIds: string[] = []
@@ -97,14 +125,14 @@ export const createResumeRepository = (db: DatabaseSync) => {
         raw_text: input.rawText,
         parsed_at: now,
         source_format: input.sourceFormat,
-        contact_name: null,
-        contact_email: null,
-        contact_phone: null,
-        contact_location: null,
-        summary: null,
-        educations: null,
-        experiences: null,
-        skills: null,
+        contact_name: parsed?.contact.name ?? null,
+        contact_email: parsed?.contact.email ?? null,
+        contact_phone: parsed?.contact.phone ?? null,
+        contact_location: parsed?.contact.location ?? null,
+        summary: parsed?.summary ?? null,
+        educations: parsed?.educations.length ? JSON.stringify(parsed.educations) : null,
+        experiences: parsed?.experiences.length ? JSON.stringify(parsed.experiences) : null,
+        skills: parsed?.skills.length ? JSON.stringify(parsed.skills) : null,
         project_ids: projectIds.length > 0 ? JSON.stringify(projectIds) : null,
         created_at: now,
       }
@@ -176,7 +204,7 @@ export const createResumeRepository = (db: DatabaseSync) => {
       return true
     },
 
-    reparse: (id: string, rawText: string, projects: { name: string; period?: string; role?: string; summary?: string; keywords?: string[] }[], ownerId: string): boolean => {
+    reparse: (id: string, rawText: string, projects: { name: string; period?: string; role?: string; summary?: string; keywords?: string[] }[], ownerId: string, parsedData?: ParsedResumeData): boolean => {
       const now = Date.now()
 
       // 删除旧的项目关联
@@ -195,10 +223,28 @@ export const createResumeRepository = (db: DatabaseSync) => {
         projectIds.push(pid)
       }
 
-      // 更新 resume
+      // 更新 resume（含全部结构化字段）
+      const parsed = parsedData
       db.prepare(
-        'UPDATE resumes SET raw_text = ?, parsed_at = ?, project_ids = ? WHERE id = ?'
-      ).run(rawText, now, projectIds.length > 0 ? JSON.stringify(projectIds) : null, id)
+        `UPDATE resumes SET
+          raw_text = ?, parsed_at = ?, project_ids = ?,
+          contact_name = ?, contact_email = ?, contact_phone = ?, contact_location = ?,
+          summary = ?, educations = ?, experiences = ?, skills = ?
+        WHERE id = ?`
+      ).run(
+        rawText,
+        now,
+        projectIds.length > 0 ? JSON.stringify(projectIds) : null,
+        parsed?.contact.name ?? null,
+        parsed?.contact.email ?? null,
+        parsed?.contact.phone ?? null,
+        parsed?.contact.location ?? null,
+        parsed?.summary ?? null,
+        parsed?.educations.length ? JSON.stringify(parsed.educations) : null,
+        parsed?.experiences.length ? JSON.stringify(parsed.experiences) : null,
+        parsed?.skills.length ? JSON.stringify(parsed.skills) : null,
+        id
+      )
 
       return true
     },

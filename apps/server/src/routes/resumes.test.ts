@@ -6,6 +6,14 @@ import { hashPassword } from '../lib/auth/password.ts'
 import { randomUUID } from 'node:crypto'
 
 vi.mock('../lib/resume/extractor.ts', () => ({
+  extractResumeInfo: vi.fn().mockResolvedValue({
+    contact: { name: null, email: null, phone: null, location: null },
+    summary: null,
+    educations: [],
+    experiences: [],
+    skills: [],
+    projects: [{ name: 'Test Project', keywords: ['TS'] }],
+  }),
   extractProjectsFromResume: vi.fn().mockResolvedValue({
     projects: [{ name: 'Test Project', keywords: ['TS'] }],
   }),

@@ -34,7 +34,7 @@ interviewsRoute.post('/', async (c) => {
     return c.json(err('VALIDATION', messages), 400)
   }
 
-  const { position, level, target_company, resume_id } = parsed.data
+  const { position, target_company, resume_id } = parsed.data
   const repo = getInterviewRepo()
 
   // 验证 resume_id 存在且属于当前用户
@@ -48,7 +48,6 @@ interviewsRoute.post('/', async (c) => {
   const session = repo.createSession({
     ownerId: userId,
     position,
-    level,
     targetCompany: target_company,
     resumeId: resume_id,
   })
@@ -56,7 +55,6 @@ interviewsRoute.post('/', async (c) => {
   return c.json(ok({
     id: session.id,
     position: session.position,
-    level: session.level,
     status: session.status,
     createdAt: session.created_at,
   }), 201)
@@ -69,7 +67,6 @@ interviewsRoute.get('/', (c) => {
   return c.json(ok(rows.map((r) => ({
     id: r.id,
     position: r.position,
-    level: r.level,
     targetCompany: r.target_company,
     resumeId: r.resume_id,
     status: r.status,
@@ -92,7 +89,6 @@ interviewsRoute.get('/:id', (c) => {
   return c.json(ok({
     id: row.id,
     position: row.position,
-    level: row.level,
     targetCompany: row.target_company,
     resumeId: row.resume_id,
     status: row.status,
@@ -126,16 +122,16 @@ interviewsRoute.post('/:id/start', (c) => {
 
   repo.start(id)
 
-  // 抽题：按 position+level 随机抽 6-8 题
+  // 抽题：按 position 随机抽 6-8 题（V2 移除职级）
   const qRepo = getQuestionRepo()
-  const questions = qRepo.pickRandom({ position: row.position, level: row.level, limit: 8 })
+  const questions = qRepo.pickRandom({ position: row.position, limit: 8 })
 
   // 如果有简历，用项目类问题替换 1-2 道
   let finalQuestions = questions
   if (row.resume_id) {
     const resume = getResumeRepo().getById(row.resume_id)
     if (resume && resume.projects.length > 0) {
-      const projectQs = qRepo.pickRandom({ position: row.position, level: row.level, limit: 2, category: 'project' as const })
+      const projectQs = qRepo.pickRandom({ position: row.position, limit: 2, category: 'project' as const })
       if (projectQs.length > 0) {
         // 替换前 2 道为项目类问题
         finalQuestions = [...projectQs, ...questions.slice(projectQs.length)]
@@ -218,7 +214,6 @@ interviewsRoute.post('/:id/answer', async (c) => {
   // 调用面试官 LLM
   const reply = await askInterviewer({
     position: session.position,
-    level: session.level,
     targetCompany: session.target_company ?? undefined,
     resumeProjects,
     currentQuestion: currentQuestion?.main_text ?? lastQuestionTurn?.text ?? '请继续。',

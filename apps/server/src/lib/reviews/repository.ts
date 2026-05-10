@@ -3,7 +3,8 @@ import { randomUUID } from 'node:crypto'
 
 export interface ReviewReportRow {
   id: string
-  session_id: string
+  type: string
+  target_id: string
   overall_text: string
   generated_at: number
   llm_meta: string | null
@@ -28,7 +29,8 @@ export interface PerQuestionReview {
 }
 
 export interface CreateReviewInput {
-  sessionId: string
+  type?: string
+  targetId: string
   overallText: string
   llmMeta?: Record<string, unknown>
   scores: { axis: string; value: number; evidence?: string }[]
@@ -42,8 +44,8 @@ export const createReviewRepository = (db: DatabaseSync) => {
       const now = Date.now()
 
       db.prepare(
-        'INSERT INTO review_reports (id, session_id, overall_text, generated_at, llm_meta, created_at) VALUES (?, ?, ?, ?, ?, ?)'
-      ).run(id, input.sessionId, input.overallText, now, input.llmMeta ? JSON.stringify(input.llmMeta) : null, now)
+        'INSERT INTO review_reports (id, type, target_id, overall_text, generated_at, llm_meta, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
+      ).run(id, input.type ?? 'interview', input.targetId, input.overallText, now, input.llmMeta ? JSON.stringify(input.llmMeta) : null, now)
 
       for (const s of input.scores) {
         db.prepare(
@@ -53,7 +55,8 @@ export const createReviewRepository = (db: DatabaseSync) => {
 
       return {
         id,
-        session_id: input.sessionId,
+        type: input.type ?? 'interview',
+        target_id: input.targetId,
         overall_text: input.overallText,
         generated_at: now,
         llm_meta: input.llmMeta ? JSON.stringify(input.llmMeta) : null,
@@ -61,8 +64,8 @@ export const createReviewRepository = (db: DatabaseSync) => {
       }
     },
 
-    getBySessionId: (sessionId: string): (ReviewReportRow & { scores: ScoreRow[] }) | null => {
-      const row = db.prepare('SELECT * FROM review_reports WHERE session_id = ?').get(sessionId) as ReviewReportRow | undefined
+    getByTargetId: (targetId: string): (ReviewReportRow & { scores: ScoreRow[] }) | null => {
+      const row = db.prepare('SELECT * FROM review_reports WHERE target_id = ?').get(targetId) as ReviewReportRow | undefined
       if (!row) return null
       const scores = db.prepare('SELECT * FROM scores WHERE report_id = ?').all(row.id) as unknown as ScoreRow[]
       return { ...row, scores }

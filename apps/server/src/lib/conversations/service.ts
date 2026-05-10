@@ -1,6 +1,7 @@
 import type { ConversationsRepository } from './repository.ts'
 import type { Message, MessageStatus } from './types.ts'
 import type { ChatMessage, ChatStreamer } from '../llm/stream.ts'
+import { loadSkill } from '../skills/prompt.ts'
 
 export type ChatEvent =
   | { kind: 'reasoning'; text: string }
@@ -12,6 +13,7 @@ export interface ChatOptions {
   model?: string
   temperature?: number
   abortSignal?: AbortSignal
+  skillName?: string
 }
 
 export interface ConversationServiceDeps {
@@ -61,12 +63,27 @@ export const createConversationService = (deps: ConversationServiceDeps): Conver
       return { assistantId: assistant.id }
     })
 
+    let skillSystemPrompt = ''
+    if (opts?.skillName) {
+      try {
+        const skill = await loadSkill(opts.skillName)
+        skillSystemPrompt = skill.systemPrompt
+      } catch {
+        // skill 加载失败时静默跳过，不阻塞对话
+      }
+    }
+
     const llmMessages: ChatMessage[] = []
     if (conv.systemPrompt) {
       llmMessages.push({ role: 'system', content: conv.systemPrompt })
     }
+    if (skillSystemPrompt) {
+      llmMessages.push({ role: 'system', content: skillSystemPrompt })
+    }
     for (const m of history) {
-      if (m.role === 'system' && conv.systemPrompt) continue
+      if (m.role === 'system') {
+        if (conv.systemPrompt || skillSystemPrompt) continue
+      }
       llmMessages.push({ role: m.role, content: m.content })
     }
     llmMessages.push({ role: 'user', content: userText })

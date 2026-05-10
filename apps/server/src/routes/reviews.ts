@@ -3,7 +3,7 @@ import { err, ok } from '@byteready/shared'
 import { requireAuth } from '../lib/auth/middleware.ts'
 import { getDb } from '../lib/db/client.ts'
 import { createReviewRepository } from '../lib/reviews/repository.ts'
-import { createInterviewRepository } from '../lib/interviews/repository.ts'
+import { createTrainingRepository } from '../lib/training/repository.ts'
 import { createResumeRepository } from '../lib/resume/repository.ts'
 import { createQuestionRepository } from '../lib/questions/repository.ts'
 import { generateReview } from '../lib/reviews/generator.ts'
@@ -12,7 +12,7 @@ export const reviewsRoute = new Hono()
 reviewsRoute.use('*', requireAuth)
 
 const getReviewRepo = () => createReviewRepository(getDb())
-const getInterviewRepo = () => createInterviewRepository(getDb())
+const getTrainingRepo = () => createTrainingRepository(getDb())
 const getResumeRepo = () => createResumeRepository(getDb())
 const getQuestionRepo = () => createQuestionRepository(getDb())
 
@@ -27,15 +27,18 @@ reviewsRoute.get('/:id', (c) => {
     return c.json(err('NOT_FOUND', '复盘报告不存在'), 404)
   }
 
-  // 验证所属用户
-  const session = getInterviewRepo().getById(report.session_id)
-  if (!session || session.owner_id !== userId) {
-    return c.json(err('NOT_FOUND', '复盘报告不存在'), 404)
+  // 验证所属用户：面试复盘查 training_sessions，其他类型暂不验证
+  if (report.type === 'interview') {
+    const session = getTrainingRepo().getById(report.target_id)
+    if (!session || session.owner_id !== userId) {
+      return c.json(err('NOT_FOUND', '复盘报告不存在'), 404)
+    }
   }
 
   return c.json(ok({
     id: report.id,
-    sessionId: report.session_id,
+    type: report.type,
+    targetId: report.target_id,
     overallText: report.overall_text,
     generatedAt: report.generated_at,
     scores: report.scores.map((s) => ({
@@ -47,15 +50,15 @@ reviewsRoute.get('/:id', (c) => {
   }))
 })
 
-// POST /api/reviews (内部调用，由 interview end 触发)
+// POST /api/reviews (内部调用，由 training end 触发)
 export async function triggerReview(sessionId: string): Promise<string | null> {
-  const interviewRepo = getInterviewRepo()
+  const trainingRepo = getTrainingRepo()
   const reviewRepo = getReviewRepo()
-  const session = interviewRepo.getById(sessionId)
+  const session = trainingRepo.getById(sessionId)
   if (!session || session.status !== 'ended') return null
 
   // 检查是否已生成
-  const existing = reviewRepo.getBySessionId(sessionId)
+  const existing = reviewRepo.getByTargetId(sessionId)
   if (existing) return existing.id
 
   // 收集简历项目
@@ -81,16 +84,25 @@ export async function triggerReview(sessionId: string): Promise<string | null> {
   // 生成复盘
   try {
     const result = await generateReview({
+      type: 'interview',
       resumeProjects,
       questions,
-      turns: session.turns.map((t) => ({ kind: t.kind, text: t.text, questionId: t.question_id })),
+      turns: session.turns.map((t) => ({
+        kind: t.kind,
+        text: t.text,
+        questionId: t.question_id,
+        phase: t.phase,
+        state: t.state,
+        projectId: t.project_id,
+      })),
     })
 
     const report = reviewRepo.create({
-      sessionId,
+      type: 'interview',
+      targetId: sessionId,
       overallText: result.overallText,
       scores: result.scores.map((s) => ({ axis: s.axis, value: s.value, evidence: s.evidence })),
-      llmMeta: { fallback: false },
+      llmMeta: { fallback: false, phaseReviews: result.phaseReviews, projectMatches: result.projectMatches },
     })
 
     return report.id
@@ -98,7 +110,8 @@ export async function triggerReview(sessionId: string): Promise<string | null> {
     console.error('[review] 生成复盘失败:', e)
     // 降级保存
     const report = reviewRepo.create({
-      sessionId,
+      type: 'interview',
+      targetId: sessionId,
       overallText: '复盘生成失败，请稍后重试',
       scores: [
         { axis: '专业知识深度', value: 0, evidence: '生成失败' },

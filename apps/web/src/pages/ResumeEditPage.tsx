@@ -31,9 +31,9 @@ export function ResumeEditPage() {
         if (res.success) {
           setResume({
             ...res.data,
-            educations: res.data.educations || [],
-            experiences: res.data.experiences || [],
-            skills: res.data.skills || [],
+            educations: Array.isArray(res.data.educations) ? res.data.educations : [],
+            experiences: Array.isArray(res.data.experiences) ? res.data.experiences : [],
+            skills: Array.isArray(res.data.skills) ? res.data.skills : [],
           })
         }
       })

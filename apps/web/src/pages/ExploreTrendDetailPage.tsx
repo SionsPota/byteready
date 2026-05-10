@@ -11,6 +11,7 @@ import {
   Tag as TagIcon,
 } from 'lucide-react'
 import { useApi } from '../hooks/useApi.ts'
+import { CrossRefBlock, type RelatedByTags } from '../components/CrossRefBlock.tsx'
 
 interface RelatedProject {
   id: string
@@ -41,6 +42,7 @@ interface TrendDetail {
   year: string | null
   tags: string[]
   relatedProjects: RelatedProject[]
+  relatedByTags: RelatedByTags
 }
 
 const TYPE_LABELS: Record<NonNullable<RelatedProject['projectType']>, string> = {
@@ -261,6 +263,10 @@ export function ExploreTrendDetailPage() {
           </div>
         </div>
       )}
+
+      <div className="mt-4">
+        <CrossRefBlock data={trend.relatedByTags} />
+      </div>
     </div>
   )
 }

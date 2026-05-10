@@ -15,6 +15,7 @@ import {
   BookOpen,
 } from 'lucide-react'
 import { useApi } from '../hooks/useApi.ts'
+import { CrossRefBlock, type RelatedByTags } from '../components/CrossRefBlock.tsx'
 
 type ProjectType = 'quick_win' | 'weekend_build' | 'deep_dive'
 type Difficulty = 'beginner' | 'intermediate' | 'advanced'
@@ -53,6 +54,7 @@ interface ProjectDetail {
   isInterviewRelated: boolean
   tags: string[]
   relatedTrends: RelatedTrend[]
+  relatedByTags: RelatedByTags
 }
 
 const TYPE_LABELS: Record<ProjectType, { label: string; color: string }> = {
@@ -340,6 +342,10 @@ export function ExploreProjectDetailPage() {
           </div>
         </div>
       )}
+
+      <div className="mt-4">
+        <CrossRefBlock data={project.relatedByTags} />
+      </div>
     </div>
   )
 }

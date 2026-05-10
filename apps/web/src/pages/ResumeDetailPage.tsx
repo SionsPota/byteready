@@ -46,10 +46,10 @@ export function ResumeDetailPage() {
           setResume({
             ...res.data,
             contact: res.data.contact || {},
-            educations: res.data.educations || [],
-            experiences: res.data.experiences || [],
-            skills: res.data.skills || [],
-            projects: res.data.projects || [],
+            educations: Array.isArray(res.data.educations) ? res.data.educations : [],
+            experiences: Array.isArray(res.data.experiences) ? res.data.experiences : [],
+            skills: Array.isArray(res.data.skills) ? res.data.skills : [],
+            projects: Array.isArray(res.data.projects) ? res.data.projects : [],
           })
         }
       })
@@ -73,10 +73,10 @@ export function ResumeDetailPage() {
       setResume({
         ...json.data,
         contact: json.data.contact || {},
-        educations: json.data.educations || [],
-        experiences: json.data.experiences || [],
-        skills: json.data.skills || [],
-        projects: json.data.projects || [],
+        educations: Array.isArray(json.data.educations) ? json.data.educations : [],
+        experiences: Array.isArray(json.data.experiences) ? json.data.experiences : [],
+        skills: Array.isArray(json.data.skills) ? json.data.skills : [],
+        projects: Array.isArray(json.data.projects) ? json.data.projects : [],
       })
     }
   }

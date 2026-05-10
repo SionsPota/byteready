@@ -87,6 +87,26 @@ export function LoginPage() {
           </button>
         </form>
 
+        {!isRegister && (
+          <div className="mt-6 pt-6 border-t border-slate-800">
+            <p className="text-center text-xs text-slate-500 mb-3">快速体验 Demo 账号</p>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => { setEmail('demo-frontend@byteready.com'); setPassword('demo123'); }}
+                className="px-3 py-2 rounded-md border border-slate-700 text-xs text-slate-300 hover:border-emerald-500 hover:text-emerald-400 transition-colors"
+              >
+                前端工程师
+              </button>
+              <button
+                onClick={() => { setEmail('demo-ai-agent@byteready.com'); setPassword('demo123'); }}
+                className="px-3 py-2 rounded-md border border-slate-700 text-xs text-slate-300 hover:border-emerald-500 hover:text-emerald-400 transition-colors"
+              >
+                AI Agent工程师
+              </button>
+            </div>
+          </div>
+        )}
+
         <p className="text-center text-sm text-slate-500 mt-6">
           {isRegister ? '已有账号？' : '还没有账号？'}
           <button

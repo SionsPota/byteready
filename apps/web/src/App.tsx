@@ -1,51 +1,41 @@
-import { useEffect, useState } from 'react'
-import type { ApiResponse } from '@byteready/shared'
+import { Routes, Route, Navigate } from 'react-router-dom'
+import { AuthProvider, useAuth } from './contexts/AuthContext'
+import { Layout } from './components/Layout'
+import { LoginPage } from './pages/LoginPage'
+import { DashboardPage } from './pages/DashboardPage'
+import { ResumesPage } from './pages/ResumesPage'
+import { ResumeDetailPage } from './pages/ResumeDetailPage'
+import { NewInterviewPage } from './pages/NewInterviewPage'
+import { InterviewRunPage } from './pages/InterviewRunPage'
+import { ReviewPage } from './pages/ReviewPage'
+import { TrendsPage } from './pages/TrendsPage'
 
-interface HealthData {
-  status: string
-  uptime: number
-  timestamp: string
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth()
+  return user ? <>{children}</> : <Navigate to="/login" replace />
+}
+
+function RootRedirect() {
+  const { user } = useAuth()
+  return user ? <Navigate to="/dashboard" replace /> : <Navigate to="/login" replace />
 }
 
 export function App() {
-  const [health, setHealth] = useState<HealthData | null>(null)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    let cancelled = false
-    fetch('/api/health')
-      .then((r) => r.json() as Promise<ApiResponse<HealthData>>)
-      .then((res) => {
-        if (cancelled) return
-        if (res.success) setHealth(res.data)
-        else setError(res.error.message)
-      })
-      .catch((e: unknown) => {
-        if (cancelled) return
-        setError(e instanceof Error ? e.message : 'Unknown error')
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-8">
-      <div className="max-w-2xl w-full">
-        <h1 className="text-4xl font-bold mb-2">ByteReady</h1>
-        <p className="text-slate-400 mb-8">TypeScript 全栈骨架 · Vite + React + Hono</p>
-
-        <section className="rounded-lg border border-slate-800 bg-slate-900 p-6">
-          <h2 className="text-lg font-semibold mb-3">服务端健康检查</h2>
-          {error && <p className="text-red-400">错误：{error}</p>}
-          {!error && !health && <p className="text-slate-500">加载中...</p>}
-          {health && (
-            <pre className="text-sm text-emerald-300 overflow-auto">
-              {JSON.stringify(health, null, 2)}
-            </pre>
-          )}
-        </section>
-      </div>
-    </main>
+    <AuthProvider>
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route element={<Layout />}>
+          <Route path="/" element={<RootRedirect />} />
+          <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
+          <Route path="/resumes" element={<ProtectedRoute><ResumesPage /></ProtectedRoute>} />
+          <Route path="/resumes/:id" element={<ProtectedRoute><ResumeDetailPage /></ProtectedRoute>} />
+          <Route path="/interviews/new" element={<ProtectedRoute><NewInterviewPage /></ProtectedRoute>} />
+          <Route path="/interviews/:id/run" element={<ProtectedRoute><InterviewRunPage /></ProtectedRoute>} />
+          <Route path="/reviews/:id" element={<ProtectedRoute><ReviewPage /></ProtectedRoute>} />
+          <Route path="/trends" element={<ProtectedRoute><TrendsPage /></ProtectedRoute>} />
+        </Route>
+      </Routes>
+    </AuthProvider>
   )
 }

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-ByteReady 是一个 TypeScript 全栈骨架，面向 2026/05/10 的现场挑战赛。前端 Vite + React 19 + Tailwind v4，后端 Hono on Node 22（用 Node 原生 TS 执行能力，不经 tsx/编译），pnpm monorepo 管理。挑战赛侧重 AI 能力集成（LLM / 语音 / 图像 / RAG），所有外部模型 API Key 都通过仓库根 `.env` 注入到后端。
+ByteReady 是一个 TypeScript 全栈骨架，面向 2026/05/10 的现场挑战赛。前端 Vite + React 19 + Tailwind v4，后端 Hono on Node 24 LTS（零 flag 直跑 TS，不经 tsx/编译），pnpm monorepo 管理。挑战赛侧重 AI 能力集成（LLM / 语音 / 图像 / RAG），所有外部模型 API Key 都通过仓库根 `.env` 注入到后端。
 
 ## Repository Layout
 
@@ -21,8 +21,10 @@ packages/
 ## Common Commands
 
 ```bash
-# 首次安装（root 执行）
-pnpm install
+# 首次进入项目（统一运行时与包管理器）
+nvm use            # 读取 .nvmrc，切到 Node 24.15.0
+corepack enable    # 启用 Node 自带的 pnpm/yarn 管家
+pnpm install       # 安装 workspace 依赖（pnpm 版本由 packageManager 字段锁定）
 
 # 同时跑前后端（推荐）
 pnpm dev
@@ -46,15 +48,17 @@ pnpm --filter @byteready/web preview
 ## Architecture Notes
 
 ### 跨包引用：源码直出，无构建步骤
-`packages/shared` 的 `package.json` 把 `exports` 直接指向 `./src/index.ts`。Vite 与 Node 22 的 `--experimental-strip-types` 都能原生消费 TS，因此整个 monorepo 不需要先构建 shared 再消费。**后果**：不要给 shared 加构建脚本（会让 IDE 与运行时分叉）；shared 里也不要写运行时副作用代码（前端 tree-shake 会受影响）。
+`packages/shared` 的 `package.json` 把 `exports` 直接指向 `./src/index.ts`。Vite 与 Node 24 都能原生消费 TS，因此整个 monorepo 不需要先构建 shared 再消费。**后果**：不要给 shared 加构建脚本（会让 IDE 与运行时分叉）；shared 里也不要写运行时副作用代码（前端 tree-shake 会受影响）。
 
 ### Node 原生 TS：相对 import 必须带 `.ts` 扩展名
-后端用 Node 22.6+ 的 `--experimental-strip-types` 直接跑 TS（脚本里同时挂了 `--disable-warning=ExperimentalWarning` 静音 experimental 提示）。Node 23.6+ 该 flag 默认开启，到时可去掉。**硬约束**：所有 `from './xxx'` 形式的相对导入必须显式写成 `from './xxx.ts'`，工作区包导入（`from '@byteready/shared'`）不需要。tsconfig 里 `allowImportingTsExtensions: true` + `noEmit: true` 已经配好。
+后端用 Node 24 LTS 直接 `node src/index.ts` 跑，无需任何 flag。**硬约束**：所有 `from './xxx'` 形式的相对导入必须显式写成 `from './xxx.ts'`，工作区包导入（`from '@byteready/shared'`）不需要。tsconfig 里 `allowImportingTsExtensions: true` + `noEmit: true` 已经配好。
 
 新增后端文件或 shared 文件时**记得带 `.ts`**，否则启动时会报 `ERR_MODULE_NOT_FOUND`。前端 Vite 这边随意，带不带都行。
 
+不能用：`enum`、`namespace`、构造器参数属性（`constructor(public x: number)`）、装饰器元数据。这些是 Node strip-types 的禁区——会直接报错而不是悄悄忽略。
+
 ### 后端运行模式：node 直跑，没有 dist
-`apps/server` 的 `dev`/`start` 都是 `node --experimental-strip-types ...src/index.ts`，**没有** `tsc -> node dist/...` 这一步。这是为了避免 monorepo 里 `@byteready/shared` 的 TS 源码导出在编译产物里无法解析的问题。生产部署直接 `pnpm --filter @byteready/server start`，容器里也跑 `node`。如果以后真要切换成预编译产物，shared 也要一起改成发布编译产物，并把所有 `.ts` 后缀去掉。
+`apps/server` 的 `dev`/`start` 都是 `node src/index.ts`（dev 加 `--watch` 热重载），**没有** `tsc -> node dist/...` 这一步。这是为了避免 monorepo 里 `@byteready/shared` 的 TS 源码导出在编译产物里无法解析的问题。生产部署直接 `pnpm --filter @byteready/server start`，容器里只要 Node 24+ 就行。如果以后真要切换成预编译产物，shared 也要一起改成发布编译产物，并把所有 `.ts` 后缀去掉。
 
 ### 前后端连接：Vite 代理 /api
 `apps/web/vite.config.ts` 把 `/api/*` 代理到后端。代理目标端口在启动时通过 `loadEnv` 从仓库根 `.env` 的 `SERVER_PORT` 读取，无该变量时默认 `8787`。**前端必须用 `/api/...` 相对路径**调用后端，不要写绝对 URL，这样开发与生产同源。生产部署时，由反向代理（或后端静态托管）把 `/api` 与 `/`（前端构建产物）放在同一域名下。

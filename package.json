@@ -5,7 +5,7 @@
   "type": "module",
   "description": "ByteReady · TypeScript 全栈项目（Vite + React 前端 / Hono 后端）",
   "engines": {
-    "node": ">=20",
+    "node": ">=24",
     "pnpm": ">=9"
   },
   "packageManager": "pnpm@9.15.9",

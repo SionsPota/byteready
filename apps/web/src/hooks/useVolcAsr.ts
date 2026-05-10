@@ -79,6 +79,7 @@ export function useVolcAsr(options: UseVolcAsrOptions = {}): UseVolcAsrResult {
   const workletNodeRef = useRef<AudioWorkletNode | null>(null)
 
   const finalAccRef = useRef('') // 已固化的完整累积文本
+  const partialTextRef = useRef('') // 当前 partial 增量（与 state 同步，供 autoEnd 快照用）
   const stoppedRef = useRef(false) // 防止 stop 二次进入
   const lastTextAtRef = useRef<number | null>(null) // 上次收到 ASR 文本的时间；null = 还没出第一个字
   const autoEndTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -90,6 +91,11 @@ export function useVolcAsr(options: UseVolcAsrOptions = {}): UseVolcAsrResult {
     (opts: { auto?: boolean; silent?: boolean; reason?: string } = {}) => {
       if (stoppedRef.current) return
       stoppedRef.current = true
+
+      // 先快照最终文本：setState('idle') 可能触发外部重新渲染并再次 asr.start()，
+      // 新录音会重置 finalAccRef，必须在可能的重渲染之前保存。
+      // partial 可能没有 final 确认，所以把 partial 增量也拼进来。
+      const finalNow = (finalAccRef.current + partialTextRef.current).trim()
 
       setState('idle')
       setCountdown(null)
@@ -146,7 +152,6 @@ export function useVolcAsr(options: UseVolcAsrOptions = {}): UseVolcAsrResult {
 
       if (opts.silent) return
 
-      const finalNow = finalAccRef.current
       const cb = callbacksRef.current
       if (opts.auto) {
         const reason = opts.reason ?? `已自动结束（${autoEndMs / 1000} 秒未检测到新文本）`
@@ -170,6 +175,7 @@ export function useVolcAsr(options: UseVolcAsrOptions = {}): UseVolcAsrResult {
     setVolume(0)
     setCountdown(null)
     finalAccRef.current = ''
+    partialTextRef.current = ''
     lastTextAtRef.current = null // 等第一个字出来才开始计时
 
     let stream: MediaStream
@@ -357,6 +363,7 @@ registerProcessor('pcm-processor', PcmProcessor)
           ? payload.text.slice(acc.length)
           : payload.text
         setPartialAddon(tail)
+        partialTextRef.current = tail
       } else if (payload.type === 'final' && typeof payload.text === 'string') {
         lastTextAtRef.current = Date.now()
         setCountdown(null)
@@ -366,6 +373,7 @@ registerProcessor('pcm-processor', PcmProcessor)
           setFinalText(payload.text)
         }
         setPartialAddon('')
+        partialTextRef.current = ''
       } else if (payload.type === 'error') {
         const msg = payload.error ?? 'upstream_error'
         setError(msg)

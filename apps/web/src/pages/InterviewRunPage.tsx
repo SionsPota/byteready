@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useRef, useCallback } from 'react'
+import { useEffect, useMemo, useState, useRef, useCallback, memo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { Send, Square, SkipForward, Mic, Volume2, VolumeX, Radio, Play } from 'lucide-react'
 import { useVolcAsr } from '../hooks/useVolcAsr.ts'
@@ -57,6 +57,62 @@ const TYPE_LABELS: Record<string, string> = {
   project_qa: '项目问答',
   random_qa: '随机问答',
 }
+
+interface TurnBubbleProps {
+  turn: Turn
+  isStreaming: boolean
+  streamingProgress: number
+}
+
+/** 单个对话气泡：memo 包裹，非流式时不随 streamingProgress 刷新 */
+const TurnBubble = memo(
+  function TurnBubble({ turn, isStreaming, streamingProgress }: TurnBubbleProps) {
+    const isCandidate = turn.kind === 'candidate'
+    const isSystem = turn.kind === 'system'
+    const visibleText = isStreaming
+      ? turn.text.slice(0, Math.max(1, Math.ceil(turn.text.length * streamingProgress)))
+      : turn.text
+
+    return (
+      <div className={`flex ${isCandidate ? 'justify-end' : 'justify-start'}`}>
+        <div
+          className={`max-w-[85%] sm:max-w-[75%] px-4 py-3 rounded-xl text-sm leading-relaxed ${
+            isSystem
+              ? 'bubble-system text-xs'
+              : isCandidate
+                ? 'bubble-candidate rounded-br-md'
+                : 'bubble-interviewer rounded-bl-md'
+          }`}
+        >
+          {!isSystem && (
+            <div className="flex items-center gap-2 mb-1.5">
+              <span
+                className={`text-xs font-medium ${isCandidate ? 'text-emerald-400' : 'text-slate-400'}`}
+              >
+                {isCandidate ? '你' : '面试官'}
+              </span>
+              {turn.state && (
+                <span className="text-[10px] text-slate-600">
+                  {STATE_LABELS[turn.state] || turn.state}
+                </span>
+              )}
+            </div>
+          )}
+          <p className="whitespace-pre-wrap">
+            {visibleText}
+            {isStreaming && streamingProgress < 1 && (
+              <span className="inline-block w-[2px] h-4 ml-1 bg-current align-middle animate-pulse rounded-full" />
+            )}
+          </p>
+        </div>
+      </div>
+    )
+  },
+  (prev, next) =>
+    prev.turn === next.turn &&
+    prev.isStreaming === next.isStreaming &&
+    (!prev.isStreaming || prev.streamingProgress === next.streamingProgress),
+)
 
 export function InterviewRunPage() {
   const { id } = useParams()
@@ -379,18 +435,9 @@ export function InterviewRunPage() {
     await handleAnswer('（跳过当前问题，请继续下一题）')
   }
 
-  if (!session) return (
-    <div className="flex items-center justify-center h-64">
-      <div className="w-8 h-8 border-2 border-slate-700 border-t-emerald-500 rounded-full animate-spin" />
-    </div>
-  )
-
-  const isEnded = session.status === 'ended'
-  const canAnswer = started && !isEnded && !loading && voiceState !== 'playing'
-  const stateLabel = session.currentState ? STATE_LABELS[session.currentState] || session.currentState : ''
-  const stateColorClass = session.currentState ? STATE_COLORS[session.currentState] || STATE_COLORS.IDLE : STATE_COLORS.IDLE
-
   // 语音偏好：上次用语音则面试官回复结束后自动开始录音
+  // 必须放在所有条件 return 之前，遵守 React hooks 规则
+  const isEnded = session?.status === 'ended'
   const asrStartRef = useRef(() => Promise.resolve())
   asrStartRef.current = asr.start
   useEffect(() => {
@@ -411,6 +458,16 @@ export function InterviewRunPage() {
       void asrStartRef.current()
     }
   }, [voiceState, voicePreferred, started, loading, isEnded, hasMic])
+
+  if (!session) return (
+    <div className="flex items-center justify-center h-64">
+      <div className="w-8 h-8 border-2 border-slate-700 border-t-emerald-500 rounded-full animate-spin" />
+    </div>
+  )
+
+  const canAnswer = started && !isEnded && !loading && voiceState !== 'playing'
+  const stateLabel = session.currentState ? STATE_LABELS[session.currentState] || session.currentState : ''
+  const stateColorClass = session.currentState ? STATE_COLORS[session.currentState] || STATE_COLORS.IDLE : STATE_COLORS.IDLE
 
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] lg:h-[calc(100vh-4rem)] animate-fade-in">
@@ -498,50 +555,14 @@ export function InterviewRunPage() {
 
       {/* Transcript */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-4 pr-2">
-        {displayedTurns.map((turn) => {
-          const isCandidate = turn.kind === 'candidate'
-          const isSystem = turn.kind === 'system'
-          const isStreaming = turn.id === streamingTurnId
-          // 流式显示：按 streamingProgress 截取文字。max(1) 保证有 TTS 在播时至少出 1 个字
-          const visibleText = isStreaming
-            ? turn.text.slice(0, Math.max(1, Math.ceil(turn.text.length * streamingProgress)))
-            : turn.text
-          return (
-            <div
-              key={turn.id}
-              className={`flex ${isCandidate ? 'justify-end' : 'justify-start'}`}
-            >
-              <div
-                className={`max-w-[85%] sm:max-w-[75%] px-4 py-3 rounded-xl text-sm leading-relaxed ${
-                  isSystem
-                    ? 'bubble-system text-xs'
-                    : isCandidate
-                      ? 'bubble-candidate rounded-br-md'
-                      : 'bubble-interviewer rounded-bl-md'
-                }`}
-              >
-                {!isSystem && (
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <span className={`text-xs font-medium ${isCandidate ? 'text-emerald-400' : 'text-slate-400'}`}>
-                      {isCandidate ? '你' : '面试官'}
-                    </span>
-                    {turn.state && (
-                      <span className="text-[10px] text-slate-600">
-                        {STATE_LABELS[turn.state] || turn.state}
-                      </span>
-                    )}
-                  </div>
-                )}
-                <p className="whitespace-pre-wrap">
-                  {visibleText}
-                  {isStreaming && streamingProgress < 1 && (
-                    <span className="inline-block w-[2px] h-4 ml-1 bg-current align-middle animate-pulse rounded-full" />
-                  )}
-                </p>
-              </div>
-            </div>
-          )
-        })}
+        {displayedTurns.map((turn) => (
+          <TurnBubble
+            key={turn.id}
+            turn={turn}
+            isStreaming={turn.id === streamingTurnId}
+            streamingProgress={streamingProgress}
+          />
+        ))}
         {loading && (
           <div className="flex justify-start">
             <div className="px-4 py-3 rounded-xl bubble-interviewer rounded-bl-md">

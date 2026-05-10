@@ -1,0 +1,69 @@
+%%{init: {'theme':'base','themeVariables':{
+  'primaryColor':'#1e293b','primaryTextColor':'#e2e8f0','primaryBorderColor':'#475569',
+  'lineColor':'#94a3b8','actorBkg':'#1e293b','actorBorder':'#60a5fa','actorTextColor':'#e2e8f0',
+  'signalColor':'#cbd5e1','signalTextColor':'#e2e8f0','noteBkgColor':'#3f1f3f','noteTextColor':'#fce7f3',
+  'fontFamily':'-apple-system, "Segoe UI", "Microsoft YaHei", sans-serif','fontSize':'14px'
+}}}%%
+sequenceDiagram
+    autonumber
+    participant U as 浏览器
+    participant V as Vite Proxy
+    participant H as Hono Routes
+    participant M as Auth MW
+    participant D as Domain Lib
+    participant K as Kimi LLM
+    participant S as SiliconFlow
+    participant T as 火山 TTS
+    participant A as 火山 ASR
+    participant DB as SQLite
+
+    rect rgba(96,165,250,0.08)
+    Note over U,DB: 1) 普通 HTTP 请求（含登录态）
+    U->>V: fetch('/api/...', cookie)
+    V->>H: 转发 (dev only)
+    H->>M: 解析 session
+    M-->>H: user 注入 ctx
+    H->>D: 业务调用
+    D->>DB: 读/写 (WAL)
+    DB-->>D: rows
+    D-->>H: 数据
+    H-->>U: ApiResponse(T)
+    end
+
+    rect rgba(167,139,250,0.08)
+    Note over U,DB: 2) 训练面试 — LLM 流式 + 语音双工
+    U->>H: POST /api/training/start
+    H->>D: training/state-machine
+    D->>DB: 写入 session
+    D->>K: chat (SSE 流)
+    K-->>D: token chunks
+    D-->>U: SSE 流回写问题
+    U->>U: 文本转 TTS 请求
+    U->>H: POST /api/voice/tts (text)
+    H->>T: WSS 二进制帧
+    T-->>H: audio chunks
+    H-->>U: 音频流
+    U-->>U: 播放并录音
+    U->>H: WS /api/voice/asr (PCM 帧)
+    H->>A: WSS 二进制转发
+    A-->>H: 文本片段
+    H-->>U: 实时 transcript
+    U->>H: POST /api/training/answer
+    H->>D: 评分 + 状态推进
+    D->>K: 复盘 prompt (异步)
+    K-->>D: review
+    D->>DB: 持久化 review
+    end
+
+    rect rgba(52,211,153,0.08)
+    Note over U,DB: 3) Explore 检索 — 向量召回 + 重排
+    U->>H: GET /api/explore/search?q=...
+    H->>D: explore/recommender
+    D->>S: embedding(query) (HTTPS)
+    S-->>D: query vec
+    D->>DB: ANN candidates
+    D->>S: rerank(query, docs)
+    S-->>D: rerank scores
+    D-->>H: 排序后聚合 hub
+    H-->>U: ApiResponse
+    end

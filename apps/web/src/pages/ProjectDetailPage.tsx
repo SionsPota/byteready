@@ -172,7 +172,7 @@ export function ProjectDetailPage() {
           className="btn-primary self-start shrink-0"
         >
           <Dumbbell size={16} />
-          开始项目训练
+          开始项目模拟
         </Link>
       </div>
 
@@ -253,12 +253,12 @@ export function ProjectDetailPage() {
         {relatedTraining.length === 0 ? (
           <div className="text-center py-8 card border-dashed">
             <Dumbbell size={20} className="mx-auto text-slate-600 mb-2" />
-            <p className="text-sm text-slate-500">暂无相关训练记录</p>
+            <p className="text-sm text-slate-500">暂无相关模拟记录</p>
             <Link
               to="/training"
               className="text-sm text-emerald-400 hover:text-emerald-300 mt-2 inline-flex items-center gap-1 transition-colors"
             >
-              开始新的训练
+              开始新的模拟
               <ChevronRight size={14} />
             </Link>
           </div>

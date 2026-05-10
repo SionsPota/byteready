@@ -1,0 +1,103 @@
+%%{init: {'theme':'base','themeVariables':{
+  'primaryColor':'#1e293b','primaryTextColor':'#e2e8f0','primaryBorderColor':'#475569',
+  'lineColor':'#94a3b8','secondaryColor':'#334155','tertiaryColor':'#0b1220',
+  'fontFamily':'-apple-system, "Segoe UI", "Microsoft YaHei", sans-serif','fontSize':'15px',
+  'clusterBkg':'#0f172a','clusterBorder':'#475569'
+}}}%%
+flowchart TB
+    %% =============== Layer 1: Browser ===============
+    subgraph BROWSER["🖥️ Browser — React 19 · Vite · Tailwind v4 · react-router-dom"]
+        direction LR
+        PAGES["<b>Pages</b><br/>Login · Dashboard<br/>Resumes (list/detail/edit)<br/>Training · InterviewRun<br/>Reviews · Explore (5 子页)<br/>QuestionSearch"]
+        FE_CORE["<b>共享层</b><br/>AuthContext · Layout<br/>ErrorBoundary"]
+        FE_DATA["<b>数据层</b><br/>useApi (SWR-like)<br/>lib/api.ts (ETag + LRU)"]
+        PAGES --> FE_DATA
+        PAGES -.-> FE_CORE
+    end
+
+    %% =============== Layer 2: Proxy ===============
+    PROXY{{"<b>Vite Dev Proxy</b> /api/* → SERVER_PORT<br/>(生产: 反向代理同源 / 浏览器仅访问 /api/*)"}}
+
+    %% =============== Layer 3: Backend Hono ===============
+    subgraph SERVER["⚙️ Server — Hono on Node 24 LTS（原生 TS，无构建步骤）"]
+        direction TB
+        HONO["<b>Hono App</b> · cors + logger + onError + notFound"]
+        subgraph ROUTES["Routes /api/*"]
+            direction LR
+            R_AUTH["health<br/>auth · me"]
+            R_RES["resumes<br/>questions"]
+            R_TRAIN["training<br/>projects · skills"]
+            R_VOICE["voice<br/>(HTTP + WS)"]
+            R_EXP["explore/*<br/>trends"]
+        end
+        AUTHMW["Auth Middleware (session cookie)"]
+        HONO --> ROUTES --> AUTHMW
+    end
+
+    %% =============== Layer 4: Domain ===============
+    subgraph DOMAIN["📚 Domain Lib (apps/server/src/lib/*)"]
+        direction LR
+        D_AUTH["<b>auth</b><br/>password<br/>session"]
+        D_RESUME["<b>resume</b><br/>extractor<br/>repo + optimizer"]
+        D_QUESTION["<b>questions</b><br/>search<br/>seed (大数据集)"]
+        D_TRAIN["<b>training</b><br/>interviewer-v2<br/>state-machine"]
+        D_REVIEW["<b>reviews</b><br/>phase-generator<br/>full-generator"]
+        D_EXPLORE["<b>explore</b><br/>companies / experiences<br/>projects / trends / tags<br/>cross-ref · recommender"]
+        D_SKILL["<b>skills</b><br/>loader<br/>runtime · prompt"]
+        D_DEMO["<b>demo</b><br/>seed / replay<br/>interactive"]
+    end
+
+    %% =============== Layer 5: Adapters ===============
+    subgraph ADAPTER["🔌 适配层 (外部 AI / 解析)"]
+        direction LR
+        A_LLM["<b>llm/kimi</b><br/>OpenAI 兼容 SSE 流"]
+        A_SF["<b>siliconflow</b><br/>image · embedding · rerank"]
+        A_VOLC["<b>volc</b><br/>tts · asr<br/>(自定义二进制帧)"]
+        A_PDF["<b>pdf-parser</b>"]
+    end
+
+    %% =============== Layer 6: Storage & Shared ===============
+    DB[("💾 SQLite via node:sqlite<br/>WAL · 启动时 migrate<br/>面试题大数据集 + Explore seed")]
+    SHARED["📦 @byteready/shared<br/>ApiResponse&lt;T&gt; · zod schemas<br/>(源码直出，无构建)"]
+
+    %% =============== Layer 7: External ===============
+    subgraph EXT["🌐 外部 AI 服务"]
+        direction LR
+        E_KIMI["<b>Moonshot Kimi</b><br/>HTTPS / SSE"]
+        E_SF["<b>SiliconFlow</b><br/>Z-Image-Turbo<br/>BAAI/bge-* (向量+重排)"]
+        E_VTTS["<b>火山豆包 TTS 2.0</b><br/>WSS 二进制"]
+        E_VASR["<b>火山 SeedASR</b><br/>WSS 二进制"]
+    end
+
+    %% =============== Connections ===============
+    BROWSER ==>|HTTP /api/*<br/>WS /api/voice/asr| PROXY
+    PROXY ==> HONO
+    AUTHMW --> DOMAIN
+    DOMAIN --> ADAPTER
+    DOMAIN <==> DB
+    A_LLM ==> E_KIMI
+    A_SF ==> E_SF
+    A_VOLC -.WSS.-> E_VTTS
+    A_VOLC -.WSS.-> E_VASR
+
+    BROWSER -.types.-> SHARED
+    SERVER -.types.-> SHARED
+
+    %% =============== Styles ===============
+    classDef browser fill:#1e3a5f,stroke:#60a5fa,color:#dbeafe,stroke-width:1.5px
+    classDef server fill:#3b2f5f,stroke:#a78bfa,color:#ede9fe,stroke-width:1.5px
+    classDef domain fill:#2d1f4a,stroke:#c084fc,color:#f3e8ff,stroke-width:1.5px
+    classDef adapter fill:#4a2d2d,stroke:#fb7185,color:#ffe4e6,stroke-width:1.5px
+    classDef storage fill:#3f2f1f,stroke:#fbbf24,color:#fef3c7,stroke-width:1.5px
+    classDef ext fill:#1f3a2f,stroke:#34d399,color:#d1fae5,stroke-width:1.5px
+    classDef shared fill:#3f1f3f,stroke:#f472b6,color:#fce7f3,stroke-width:1.5px
+    classDef proxy fill:#1f3838,stroke:#22d3ee,color:#cffafe,stroke-width:1.5px
+
+    class BROWSER,PAGES,FE_CORE,FE_DATA browser
+    class SERVER,HONO,ROUTES,AUTHMW,R_AUTH,R_RES,R_TRAIN,R_VOICE,R_EXP server
+    class DOMAIN,D_AUTH,D_RESUME,D_QUESTION,D_TRAIN,D_REVIEW,D_EXPLORE,D_SKILL,D_DEMO domain
+    class ADAPTER,A_LLM,A_SF,A_VOLC,A_PDF adapter
+    class DB storage
+    class EXT,E_KIMI,E_SF,E_VTTS,E_VASR ext
+    class SHARED shared
+    class PROXY proxy

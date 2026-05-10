@@ -43,7 +43,7 @@ const ENTRY_CARDS = [
     iconBg: 'from-emerald-500/20 to-emerald-600/10',
     iconColor: 'text-emerald-400',
     ringColor: 'group-hover:ring-emerald-500/30',
-    title: '训练',
+    title: '模拟',
     desc: '配置一场模拟面试，立即开始',
   },
   {
@@ -114,7 +114,7 @@ export function DashboardPage() {
             你好，{user?.name || user?.email?.split('@')[0] || '候选人'}
           </h1>
           <p className="text-sm text-slate-500 mt-1.5">
-            准备好今天的面试训练了吗？
+            准备好今天的面试模拟了吗？
           </p>
         </div>
         <Link
@@ -122,7 +122,7 @@ export function DashboardPage() {
           className="btn-primary self-start sm:self-auto shrink-0"
         >
           <Zap size={16} />
-          开始新训练
+          开始新模拟
         </Link>
       </div>
 
@@ -130,7 +130,7 @@ export function DashboardPage() {
       <div className="grid grid-cols-3 gap-3">
         <div className="card p-4 text-center">
           <p className="text-2xl font-bold text-slate-100">{totalCount}</p>
-          <p className="text-xs text-slate-500 mt-1">总训练次数</p>
+          <p className="text-xs text-slate-500 mt-1">总模拟次数</p>
         </div>
         <div className="card p-4 text-center">
           <p className="text-2xl font-bold text-emerald-400">{completedCount}</p>
@@ -205,7 +205,7 @@ export function DashboardPage() {
       {recentTrainings.length > 0 && (
         <div>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="section-title">最近训练</h2>
+            <h2 className="section-title">最近模拟</h2>
             <Link
               to="/reviews"
               className="text-xs text-slate-500 hover:text-slate-300 flex items-center gap-0.5 transition-colors"

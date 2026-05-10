@@ -149,7 +149,7 @@ export function TrainingPage() {
       })
       const json = await res.json()
       if (!res.ok || !json.success) {
-        setSubmitError(json.error?.message || json.error || '创建训练失败')
+        setSubmitError(json.error?.message || json.error || '创建模拟失败')
         setSubmitting(false)
         return
       }
@@ -166,13 +166,13 @@ export function TrainingPage() {
     <div className="max-w-2xl mx-auto animate-fade-in space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">训练</h1>
+        <h1 className="text-2xl font-bold tracking-tight">模拟</h1>
         <p className="text-sm text-slate-500 mt-1">
-          选择一份简历，配置训练参数，立即开始模拟
+          选择一份简历，配置模拟参数，立即开始模拟
         </p>
       </div>
 
-      {/* 进行中训练 banner */}
+      {/* 进行中模拟 banner */}
       {runningSession && (
         <Link
           to={`/training/${runningSession.id}`}
@@ -208,7 +208,7 @@ export function TrainingPage() {
           </div>
           <p className="text-slate-200 font-semibold text-lg">还没有简历</p>
           <p className="text-sm text-slate-500 mt-1.5 max-w-sm mx-auto leading-relaxed">
-            训练需要基于一份简历，AI 才能进行项目深挖和针对性出题
+            模拟需要基于一份简历，AI 才能进行项目深挖和针对性出题
           </p>
           <Link
             to="/resumes"
@@ -247,11 +247,11 @@ export function TrainingPage() {
             )}
           </div>
 
-          {/* 训练类型 */}
+          {/* 模拟类型 */}
           <div className="space-y-3">
             <div className="flex items-center gap-2 text-sm font-medium text-slate-300">
               <Layers size={16} className="text-slate-500" />
-              <span>训练类型</span>
+              <span>模拟类型</span>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {TRAINING_TYPES.map((t) => {
@@ -399,7 +399,7 @@ export function TrainingPage() {
             className="btn-primary w-full py-3 text-base"
           >
             <Mic size={20} />
-            {submitting ? '创建中...' : '开始训练'}
+            {submitting ? '创建中...' : '开始模拟'}
           </button>
         </div>
       )}
@@ -411,7 +411,7 @@ export function TrainingPage() {
           className="btn-ghost text-sm"
         >
           <History size={14} />
-          查看训练历史与复盘
+          查看模拟历史与复盘
           <ArrowRight size={14} />
         </Link>
       </div>

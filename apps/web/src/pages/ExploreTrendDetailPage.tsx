@@ -92,10 +92,11 @@ export function ExploreTrendDetailPage() {
         返回趋势
       </Link>
 
-      <div className="rounded-lg border border-slate-800 bg-slate-900 p-5 mb-4">
-        <div className="flex items-start justify-between mb-3">
-          <div className="flex-1">
-            <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+      {/* Header Card */}
+      <div className="card-elevated p-5 mb-5">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-2 flex-wrap">
               <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-950/30 border border-emerald-800/50 text-emerald-400">
                 {trend.category}
               </span>
@@ -110,25 +111,32 @@ export function ExploreTrendDetailPage() {
               )}
             </div>
             <h1 className="text-2xl font-bold flex items-center gap-2">
-              <TrendingUp size={20} className="text-emerald-400" />
+              <div className="w-9 h-9 rounded-lg bg-emerald-500/10 flex items-center justify-center ring-1 ring-emerald-500/20">
+                <TrendingUp size={18} className="text-emerald-400" />
+              </div>
               {trend.title}
             </h1>
             <p className="text-sm text-slate-400 mt-3 leading-relaxed">{trend.description}</p>
           </div>
-          <div className="ml-3 text-right">
-            <div className="text-3xl font-bold text-emerald-400">{trend.relevanceBase}</div>
-            <div className="text-xs text-slate-600">相关度/10+</div>
+          <div className="text-right shrink-0">
+            <div className="w-16 h-16 rounded-xl bg-emerald-500/10 flex flex-col items-center justify-center ring-1 ring-emerald-500/20">
+              <div className="text-2xl font-bold text-emerald-400">{trend.relevanceBase}</div>
+              <div className="text-[10px] text-slate-500">相关度/10</div>
+            </div>
           </div>
         </div>
 
         {trend.relatedSkills.length > 0 && (
-          <div className="mt-3 pt-3 border-t border-slate-800">
-            <p className="text-xs text-slate-500 mb-1.5">关键技术</p>
-            <div className="flex flex-wrap gap-1.5">
+          <div className="mt-4 pt-4 border-t border-slate-800/60">
+            <div className="flex items-center gap-2 mb-2">
+              <TagIcon size={12} className="text-slate-500" />
+              <p className="text-xs text-slate-500 font-medium">关键技术</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
               {trend.relatedSkills.map((s) => (
                 <span
                   key={s}
-                  className="text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-300"
+                  className="text-xs px-2.5 py-1 rounded-md bg-slate-950/50 border border-slate-800 text-slate-300"
                 >
                   {s}
                 </span>
@@ -138,10 +146,9 @@ export function ExploreTrendDetailPage() {
         )}
 
         {trend.tags.length > 0 && (
-          <div className="mt-3 pt-3 border-t border-slate-800 flex flex-wrap gap-1.5 items-center">
-            <TagIcon size={12} className="text-slate-500" />
+          <div className="mt-3 pt-3 border-t border-slate-800/60 flex flex-wrap gap-1.5 items-center">
             {trend.tags.map((t) => (
-              <span key={t} className="text-xs px-2 py-0.5 rounded-full bg-purple-950/30 text-purple-300">
+              <span key={t} className="text-xs px-2 py-0.5 rounded-full bg-purple-950/30 text-purple-300 border border-purple-900/20">
                 {t}
               </span>
             ))}
@@ -149,68 +156,90 @@ export function ExploreTrendDetailPage() {
         )}
       </div>
 
-      {trend.interviewHotspots && (
-        <div className="rounded-lg border border-amber-900/40 bg-amber-950/10 p-5 mb-4">
-          <h2 className="text-sm font-semibold flex items-center gap-2 mb-2 text-amber-400">
-            <Target size={14} />
-            面试热点
-          </h2>
-          <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">
-            {trend.interviewHotspots}
-          </p>
-        </div>
-      )}
-
-      {trend.marketImpact && (
-        <div className="rounded-lg border border-cyan-900/40 bg-cyan-950/10 p-5 mb-4">
-          <h2 className="text-sm font-semibold flex items-center gap-2 mb-2 text-cyan-400">
-            <CheckCircle2 size={14} />
-            市场影响
-          </h2>
-          <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">
-            {trend.marketImpact}
-          </p>
+      {/* Content Blocks - 2 column layout for hotspots + impact */}
+      {(trend.interviewHotspots || trend.marketImpact) && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-5">
+          {trend.interviewHotspots && (
+            <div className="card-elevated p-5 border-l-4 border-l-amber-500">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-7 h-7 rounded-lg bg-amber-500/10 flex items-center justify-center ring-1 ring-amber-500/20">
+                  <Target size={14} className="text-amber-400" />
+                </div>
+                <h2 className="text-sm font-semibold text-amber-400">面试热点</h2>
+              </div>
+              <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">
+                {trend.interviewHotspots}
+              </p>
+            </div>
+          )}
+          {trend.marketImpact && (
+            <div className="card-elevated p-5 border-l-4 border-l-cyan-500">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-7 h-7 rounded-lg bg-cyan-500/10 flex items-center justify-center ring-1 ring-cyan-500/20">
+                  <CheckCircle2 size={14} className="text-cyan-400" />
+                </div>
+                <h2 className="text-sm font-semibold text-cyan-400">市场影响</h2>
+              </div>
+              <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">
+                {trend.marketImpact}
+              </p>
+            </div>
+          )}
         </div>
       )}
 
       {trend.keyPoints.length > 0 && (
-        <div className="rounded-lg border border-slate-800 bg-slate-900 p-5 mb-4">
-          <h2 className="text-sm font-semibold flex items-center gap-2 mb-3">
-            <CheckCircle2 size={14} className="text-emerald-400" />
-            关键要点
-          </h2>
-          <ul className="space-y-2">
+        <div className="card p-5 mb-5">
+          <div className="flex items-center gap-2 mb-4">
+            <div className="w-7 h-7 rounded-lg bg-emerald-500/10 flex items-center justify-center ring-1 ring-emerald-500/20">
+              <CheckCircle2 size={14} className="text-emerald-400" />
+            </div>
+            <h2 className="text-sm font-semibold text-slate-100">关键要点</h2>
+          </div>
+          <div className="grid gap-2">
             {trend.keyPoints.map((p, i) => (
-              <li key={i} className="text-sm text-slate-300 flex items-start gap-2">
-                <span className="text-emerald-400 mt-0.5">·</span>
-                {p}
-              </li>
+              <div
+                key={i}
+                className="flex items-start gap-3 p-3 rounded-lg bg-slate-950/30 border border-slate-800/60"
+              >
+                <span className="w-6 h-6 rounded-md bg-emerald-500/10 text-emerald-400 text-xs flex items-center justify-center shrink-0 font-medium ring-1 ring-emerald-500/20">
+                  {i + 1}
+                </span>
+                <span className="text-sm text-slate-300 leading-relaxed">{p}</span>
+              </div>
             ))}
-          </ul>
+          </div>
         </div>
       )}
 
       {trend.learningAdvice && (
-        <div className="rounded-lg border border-amber-900/40 bg-amber-950/10 p-5 mb-4">
-          <h2 className="text-sm font-semibold flex items-center gap-2 mb-2 text-amber-400">
-            <Lightbulb size={14} />
-            学习建议
-          </h2>
+        <div className="card-elevated p-5 mb-5 border-l-4 border-l-purple-500">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-7 h-7 rounded-lg bg-purple-500/10 flex items-center justify-center ring-1 ring-purple-500/20">
+              <Lightbulb size={14} className="text-purple-400" />
+            </div>
+            <h2 className="text-sm font-semibold text-purple-400">学习建议</h2>
+          </div>
           <p className="text-sm text-slate-300 leading-relaxed">{trend.learningAdvice}</p>
         </div>
       )}
 
       {sourceUrls.length > 0 && (
-        <div className="rounded-lg border border-slate-800 bg-slate-900 p-4 mb-4">
-          <p className="text-xs text-slate-500 mb-2">参考链接</p>
-          <div className="space-y-1">
+        <div className="card p-4 mb-5">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-7 h-7 rounded-lg bg-slate-800 flex items-center justify-center">
+              <ExternalLink size={14} className="text-slate-400" />
+            </div>
+            <h2 className="text-sm font-semibold text-slate-100">参考链接</h2>
+          </div>
+          <div className="space-y-2">
             {sourceUrls.map((u) => (
               <a
                 key={u}
                 href={u}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-2 text-sm text-purple-400 hover:underline truncate"
+                className="flex items-center gap-2 text-sm text-purple-400 hover:text-purple-300 transition-colors truncate p-2 rounded-lg bg-slate-950/30 border border-slate-800/60 hover:border-purple-800/40"
               >
                 <ExternalLink size={14} className="shrink-0" />
                 {u}
@@ -221,38 +250,43 @@ export function ExploreTrendDetailPage() {
       )}
 
       {trend.relatedProjects.length > 0 && (
-        <div className="rounded-lg border border-slate-800 bg-slate-900 p-5">
-          <h2 className="text-sm font-semibold flex items-center gap-2 mb-3">
-            <Rocket size={14} className="text-amber-400" />
-            相关学习项目
-          </h2>
-          <div className="grid gap-3">
+        <div className="card p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <div className="w-7 h-7 rounded-lg bg-amber-500/10 flex items-center justify-center ring-1 ring-amber-500/20">
+              <Rocket size={14} className="text-amber-400" />
+            </div>
+            <h2 className="text-sm font-semibold text-slate-100">相关学习项目</h2>
+            <span className="text-xs text-slate-500">({trend.relatedProjects.length})</span>
+          </div>
+          <div className="grid gap-2">
             {trend.relatedProjects.map((p) => (
               <Link
                 key={p.id}
                 to={`/explore/projects/${p.id}`}
-                className="block p-3 rounded-md border border-slate-800 hover:border-slate-700 transition-colors"
+                className="card-interactive p-3"
               >
                 <div className="flex items-center gap-2 mb-1 flex-wrap">
                   {p.projectType && (
-                    <span className="text-xs px-2 py-0.5 rounded bg-purple-950/40 text-purple-300">
+                    <span className="text-[10px] px-2 py-0.5 rounded-md bg-purple-950/40 text-purple-300 border border-purple-900/30">
                       {TYPE_LABELS[p.projectType]}
                     </span>
                   )}
                   {p.difficulty && (
-                    <span className="text-xs text-slate-500">
+                    <span className="text-[10px] text-slate-500">
                       {DIFFICULTY_LABELS[p.difficulty]}
                     </span>
                   )}
                   {p.language && (
-                    <span className="text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-300">
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300">
                       {p.language}
                     </span>
                   )}
                   {p.stars != null && (
-                    <span className="text-xs text-slate-500">★ {p.stars.toLocaleString()}</span>
+                    <span className="text-[10px] text-yellow-500 flex items-center gap-0.5">
+                      ★ {p.stars.toLocaleString()}
+                    </span>
                   )}
-                  <span className="ml-auto text-xs font-bold text-amber-400">
+                  <span className="ml-auto text-[10px] font-bold text-amber-400">
                     {p.impactScore}/10
                   </span>
                 </div>

@@ -38,7 +38,7 @@ export function LoginPage() {
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold mb-2">ByteReady</h1>
-          <p className="text-slate-400">AI 面试训练平台</p>
+          <p className="text-slate-400">AI 面试模拟平台</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">

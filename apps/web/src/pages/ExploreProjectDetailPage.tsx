@@ -114,10 +114,11 @@ export function ExploreProjectDetailPage() {
         返回学习项目
       </Link>
 
-      <div className="rounded-lg border border-slate-800 bg-slate-900 p-5 mb-4">
-        <div className="flex items-start justify-between mb-3">
-          <div className="flex-1">
-            <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+      {/* Header Card */}
+      <div className="card-elevated p-5 mb-5">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-2 flex-wrap">
               {project.projectType && (
                 <span
                   className={`text-xs px-2 py-0.5 rounded border ${TYPE_LABELS[project.projectType].color}`}
@@ -126,12 +127,12 @@ export function ExploreProjectDetailPage() {
                 </span>
               )}
               {project.difficulty && (
-                <span className="text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-300">
+                <span className="text-xs px-2 py-0.5 rounded-md bg-slate-950/50 border border-slate-800 text-slate-300">
                   {DIFFICULTY_LABELS[project.difficulty]}
                 </span>
               )}
               {project.language && (
-                <span className="text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-300">
+                <span className="text-xs px-2 py-0.5 rounded-md bg-slate-950/50 border border-slate-800 text-slate-300">
                   {project.language}
                 </span>
               )}
@@ -149,25 +150,29 @@ export function ExploreProjectDetailPage() {
               )}
             </div>
             <h1 className="text-2xl font-bold flex items-center gap-2">
-              <Rocket size={20} className="text-amber-400" />
+              <div className="w-9 h-9 rounded-lg bg-amber-500/10 flex items-center justify-center ring-1 ring-amber-500/20">
+                <Rocket size={18} className="text-amber-400" />
+              </div>
               {project.name}
             </h1>
             <p className="text-sm text-slate-400 mt-3 leading-relaxed">{project.description}</p>
           </div>
-          <div className="ml-3 text-right shrink-0">
-            <div className="text-3xl font-bold text-amber-400">{project.impactScore}</div>
-            <div className="text-xs text-slate-600">影响分/10+</div>
+          <div className="text-right shrink-0">
+            <div className="w-16 h-16 rounded-xl bg-amber-500/10 flex flex-col items-center justify-center ring-1 ring-amber-500/20">
+              <div className="text-2xl font-bold text-amber-400">{project.impactScore}</div>
+              <div className="text-[10px] text-slate-500">影响分/10</div>
+            </div>
           </div>
         </div>
 
         {(project.stars != null || project.forks != null || project.githubUrl) && (
-          <div className="flex flex-wrap items-center gap-3 mt-3 pt-3 border-t border-slate-800 text-sm">
+          <div className="flex flex-wrap items-center gap-3 mt-4 pt-4 border-t border-slate-800/60 text-sm">
             {project.githubUrl && (
               <a
                 href={project.githubUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-1 text-purple-400 hover:underline"
+                className="flex items-center gap-1 text-purple-400 hover:text-purple-300 transition-colors"
               >
                 <ExternalLink size={14} />
                 GitHub
@@ -188,14 +193,14 @@ export function ExploreProjectDetailPage() {
           </div>
         )}
 
-        <div className="flex flex-wrap gap-1.5 mt-3 pt-3 border-t border-slate-800">
+        <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-slate-800/60">
           {project.techStack.map((t) => (
-            <span key={t} className="text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-300">
+            <span key={t} className="text-xs px-2.5 py-1 rounded-md bg-slate-950/50 border border-slate-800 text-slate-300">
               {t}
             </span>
           ))}
           {project.gapAddressed && (
-            <span className="text-xs px-2 py-0.5 rounded bg-purple-950/30 border border-purple-800/30 text-purple-300 flex items-center gap-1">
+            <span className="text-xs px-2.5 py-1 rounded-md bg-purple-950/30 border border-purple-800/30 text-purple-300 flex items-center gap-1">
               <Target size={10} />
               {project.gapAddressed}
             </span>
@@ -203,10 +208,10 @@ export function ExploreProjectDetailPage() {
         </div>
 
         {project.tags.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 mt-3 pt-3 border-t border-slate-800 items-center">
-            <TagIcon size={12} className="text-slate-500" />
+          <div className="flex flex-wrap gap-1.5 mt-3 pt-3 border-t border-slate-800/60 items-center">
+            <TagIcon size={12} className="text-slate-500 mr-1" />
             {project.tags.map((t) => (
-              <span key={t} className="text-xs px-2 py-0.5 rounded-full bg-cyan-950/30 text-cyan-300">
+              <span key={t} className="text-xs px-2 py-0.5 rounded-full bg-cyan-950/30 text-cyan-300 border border-cyan-900/20">
                 {t}
               </span>
             ))}
@@ -214,99 +219,115 @@ export function ExploreProjectDetailPage() {
         )}
       </div>
 
-      {project.learningPath && (
-        <div className="rounded-lg border border-emerald-900/40 bg-emerald-950/10 p-5 mb-4">
-          <h2 className="text-sm font-semibold flex items-center gap-2 mb-2 text-emerald-400">
-            <BookOpen size={14} />
-            学习路径建议
-          </h2>
-          <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">
-            {project.learningPath}
-          </p>
-        </div>
-      )}
+      {/* Content Grid - 2 columns on desktop */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-5">
+        {project.learningPath && (
+          <div className="card-elevated p-5 border-l-4 border-l-emerald-500">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-7 h-7 rounded-lg bg-emerald-500/10 flex items-center justify-center ring-1 ring-emerald-500/20">
+                <BookOpen size={14} className="text-emerald-400" />
+              </div>
+              <h2 className="text-sm font-semibold text-emerald-400">学习路径建议</h2>
+            </div>
+            <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">
+              {project.learningPath}
+            </p>
+          </div>
+        )}
+
+        {project.resumeTemplate && (
+          <div className="card-elevated p-5 border-l-4 border-l-amber-500">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-amber-500/10 flex items-center justify-center ring-1 ring-amber-500/20">
+                  <Star size={14} className="text-amber-400" />
+                </div>
+                <h2 className="text-sm font-semibold text-amber-400">简历描述模板</h2>
+              </div>
+              <button
+                onClick={handleCopy}
+                className="text-xs px-2.5 py-1.5 rounded-md bg-slate-800 text-slate-300 hover:bg-slate-700 flex items-center gap-1 transition-colors"
+              >
+                {copied ? <Check size={12} /> : <Copy size={12} />}
+                {copied ? '已复制' : '复制'}
+              </button>
+            </div>
+            <p className="text-sm text-slate-300 italic leading-relaxed">{project.resumeTemplate}</p>
+          </div>
+        )}
+      </div>
 
       {project.coreFeatures.length > 0 && (
-        <div className="rounded-lg border border-slate-800 bg-slate-900 p-5 mb-4">
-          <h2 className="text-sm font-semibold flex items-center gap-2 mb-3">
-            <CheckCircle2 size={14} className="text-cyan-400" />
-            核心功能
-          </h2>
-          <div className="grid grid-cols-2 gap-2">
-            {project.coreFeatures.map((f, i) => (
-              <span
-                key={i}
-                className="text-sm px-3 py-2 rounded bg-slate-800/60 text-slate-300"
-              >
-                {f}
-              </span>
-            ))}
+        <div className="card p-5 mb-5">
+          <div className="flex items-center gap-2 mb-4">
+            <div className="w-7 h-7 rounded-lg bg-cyan-500/10 flex items-center justify-center ring-1 ring-cyan-500/20">
+              <CheckCircle2 size={14} className="text-cyan-400" />
+            </div>
+            <h2 className="text-sm font-semibold text-slate-100">核心功能</h2>
           </div>
-        </div>
-      )}
-
-      {project.techHighlights.length > 0 && (
-        <div className="rounded-lg border border-cyan-900/40 bg-cyan-950/10 p-5 mb-4">
-          <h2 className="text-sm font-semibold flex items-center gap-2 mb-3 text-cyan-400">
-            <Star size={14} />
-            技术亮点
-          </h2>
-          <ul className="space-y-2">
-            {project.techHighlights.map((h, i) => (
-              <li key={i} className="text-sm text-slate-300 flex items-start gap-2">
-                <span className="text-cyan-400 mt-0.5">·</span>
-                {h}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {project.implementationSteps.length > 0 && (
-        <div className="rounded-lg border border-slate-800 bg-slate-900 p-5 mb-4">
-          <h2 className="text-sm font-semibold flex items-center gap-2 mb-3">
-            <Rocket size={14} className="text-amber-400" />
-            实现步骤
-          </h2>
-          <div className="space-y-2">
-            {project.implementationSteps.map((s, i) => (
-              <div key={i} className="flex items-center gap-3 text-sm text-slate-300">
-                <span className="w-6 h-6 rounded-full bg-slate-800 text-xs flex items-center justify-center text-slate-400 shrink-0">
-                  {i + 1}
-                </span>
-                {s}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {project.coreFeatures.map((f, i) => (
+              <div
+                key={i}
+                className="flex items-start gap-2 p-3 rounded-lg bg-slate-950/30 border border-slate-800/60"
+              >
+                <CheckCircle2 size={14} className="text-cyan-400 mt-0.5 shrink-0" />
+                <span className="text-sm text-slate-300">{f}</span>
               </div>
             ))}
           </div>
         </div>
       )}
 
-      {project.resumeTemplate && (
-        <div className="rounded-lg border border-emerald-900/40 bg-emerald-950/10 p-5 mb-4">
-          <div className="flex items-center justify-between mb-2">
-            <h2 className="text-sm font-semibold flex items-center gap-2 text-emerald-400">
-              <Star size={14} />
-              简历描述模板
-            </h2>
-            <button
-              onClick={handleCopy}
-              className="text-xs px-2 py-1 rounded bg-slate-800 text-slate-300 hover:bg-slate-700 flex items-center gap-1"
-            >
-              {copied ? <Check size={12} /> : <Copy size={12} />}
-              {copied ? '已复制' : '复制'}
-            </button>
+      {project.techHighlights.length > 0 && (
+        <div className="card-elevated p-5 mb-5 border-l-4 border-l-cyan-500">
+          <div className="flex items-center gap-2 mb-4">
+            <div className="w-7 h-7 rounded-lg bg-cyan-500/10 flex items-center justify-center ring-1 ring-cyan-500/20">
+              <Star size={14} className="text-cyan-400" />
+            </div>
+            <h2 className="text-sm font-semibold text-cyan-400">技术亮点</h2>
           </div>
-          <p className="text-sm text-slate-300 italic leading-relaxed">{project.resumeTemplate}</p>
+          <div className="grid gap-2">
+            {project.techHighlights.map((h, i) => (
+              <div key={i} className="flex items-start gap-3 p-3 rounded-lg bg-slate-950/30 border border-slate-800/60">
+                <span className="w-5 h-5 rounded-md bg-cyan-500/10 text-cyan-400 text-xs flex items-center justify-center shrink-0 font-medium">
+                  {i + 1}
+                </span>
+                <span className="text-sm text-slate-300 leading-relaxed">{h}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {project.implementationSteps.length > 0 && (
+        <div className="card p-5 mb-5">
+          <div className="flex items-center gap-2 mb-4">
+            <div className="w-7 h-7 rounded-lg bg-amber-500/10 flex items-center justify-center ring-1 ring-amber-500/20">
+              <Rocket size={14} className="text-amber-400" />
+            </div>
+            <h2 className="text-sm font-semibold text-slate-100">实现步骤</h2>
+          </div>
+          <div className="space-y-2">
+            {project.implementationSteps.map((s, i) => (
+              <div key={i} className="flex items-center gap-3 p-3 rounded-lg bg-slate-950/30 border border-slate-800/60">
+                <span className="w-6 h-6 rounded-full bg-amber-500/10 text-amber-400 text-xs flex items-center justify-center shrink-0 font-medium ring-1 ring-amber-500/20">
+                  {i + 1}
+                </span>
+                <span className="text-sm text-slate-300">{s}</span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
       {project.sourceUrl && project.sourceUrl !== project.githubUrl && (
-        <div className="rounded-lg border border-slate-800 bg-slate-900 p-4 mb-4">
+        <div className="card p-4 mb-5">
           <a
             href={project.sourceUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-2 text-sm text-purple-400 hover:underline"
+            className="flex items-center gap-2 text-sm text-purple-400 hover:text-purple-300 transition-colors"
           >
             <ExternalLink size={14} />
             参考链接
@@ -315,23 +336,26 @@ export function ExploreProjectDetailPage() {
       )}
 
       {project.relatedTrends.length > 0 && (
-        <div className="rounded-lg border border-slate-800 bg-slate-900 p-5">
-          <h2 className="text-sm font-semibold flex items-center gap-2 mb-3">
-            <TrendingUp size={14} className="text-emerald-400" />
-            相关行业趋势
-          </h2>
-          <div className="grid gap-3">
+        <div className="card p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <div className="w-7 h-7 rounded-lg bg-emerald-500/10 flex items-center justify-center ring-1 ring-emerald-500/20">
+              <TrendingUp size={14} className="text-emerald-400" />
+            </div>
+            <h2 className="text-sm font-semibold text-slate-100">相关行业趋势</h2>
+            <span className="text-xs text-slate-500">({project.relatedTrends.length})</span>
+          </div>
+          <div className="grid gap-2">
             {project.relatedTrends.map((t) => (
               <Link
                 key={t.id}
                 to={`/explore/trends/${t.id}`}
-                className="block p-3 rounded-md border border-slate-800 hover:border-slate-700 transition-colors"
+                className="card-interactive p-3"
               >
                 <div className="flex items-center gap-2 mb-1 flex-wrap">
-                  <span className="text-xs px-2 py-0.5 rounded bg-emerald-950/40 text-emerald-300">
+                  <span className="text-[10px] px-2 py-0.5 rounded-md bg-emerald-950/40 text-emerald-300 border border-emerald-900/30">
                     {t.category}
                   </span>
-                  <span className="ml-auto text-xs font-bold text-emerald-400">
+                  <span className="ml-auto text-[10px] font-bold text-emerald-400">
                     {t.relevanceBase}/10+
                   </span>
                 </div>

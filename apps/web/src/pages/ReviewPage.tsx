@@ -252,7 +252,7 @@ export function ReviewPage() {
       <div className="w-8 h-8 border-2 border-slate-700 border-t-emerald-500 rounded-full animate-spin" />
     </div>
   )
-  if (!training) return <p className="text-slate-500">训练记录不存在</p>
+  if (!training) return <p className="text-slate-500">模拟记录不存在</p>
 
   const isFullInterview = training.type === 'full'
   const phaseCfg = (PHASE_CONFIG[training.type] || PHASE_CONFIG.random_qa)!
@@ -272,7 +272,7 @@ export function ReviewPage() {
               <BarChart3 size={16} className={phaseCfg.color} />
             </div>
             <h1 className="text-2xl font-bold tracking-tight">
-              {isFullInterview ? '整面复盘' : `${PHASE_LABELS[training.type] || '训练'}复盘`}
+              {isFullInterview ? '整面复盘' : `${PHASE_LABELS[training.type] || '模拟'}复盘`}
             </h1>
           </div>
           <p className="text-sm text-slate-500">
@@ -474,20 +474,22 @@ export function ReviewPage() {
 
                   <div className={`overflow-hidden transition-all duration-300 ${isExpanded ? 'max-h-[3000px]' : 'max-h-0'}`}>
                     <div className="px-4 pb-5 space-y-5 border-t border-slate-800/60">
-                      <div className="pt-4">
-                        {/* 各维度评分 */}
+                      <div className="pt-4 space-y-5">
+                        {/* 各维度评分 - 卡片网格 */}
                         {pr.scores.length > 0 && (
-                          <div className="space-y-4">
+                          <div className="space-y-3">
                             <div className="flex items-center gap-2">
-                              <Target size={14} className="text-slate-500" />
-                              <h4 className="text-sm font-semibold text-slate-300">各维度评分</h4>
+                              <div className="w-7 h-7 rounded-lg bg-sky-500/10 flex items-center justify-center ring-1 ring-sky-500/20">
+                                <Target size={14} className="text-sky-400" />
+                              </div>
+                              <h4 className="text-sm font-semibold text-slate-100">各维度评分</h4>
                             </div>
-                            <div className="space-y-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                               {pr.scores.map((s, i) => (
-                                <div key={i} className="p-3 rounded-lg bg-slate-950/50 border border-slate-800/60">
+                                <div key={i} className="card p-4">
                                   <div className="flex items-center justify-between mb-2">
-                                    <span className="text-sm text-slate-300 font-medium">{s.dimension}</span>
-                                    <span className="text-[10px] text-slate-600">权重 {s.weight}</span>
+                                    <span className="text-sm text-slate-200 font-medium">{s.dimension}</span>
+                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-500">权重 {s.weight}</span>
                                   </div>
                                   <ScoreBar score={s.score} />
                                   <p className="text-xs text-slate-500 mt-2 leading-relaxed">{s.evidence}</p>
@@ -497,38 +499,44 @@ export function ReviewPage() {
                           </div>
                         )}
 
-                        {/* 评价 */}
-                        <div className="space-y-2">
-                          <div className="flex items-center gap-2">
-                            <FileText size={14} className="text-slate-500" />
-                            <h4 className="text-sm font-semibold text-slate-300">阶段评价</h4>
-                          </div>
-                          <p className="text-sm text-slate-300 leading-relaxed pl-6">{pr.evaluation}</p>
-                        </div>
-
-                        {/* 面试官反思 */}
-                        <div className="space-y-2">
-                          <div className="flex items-center gap-2">
-                            <Lightbulb size={14} className="text-amber-500/70" />
-                            <h4 className="text-sm font-semibold text-slate-300">面试官反思</h4>
-                          </div>
-                          <p className="text-sm text-slate-300 leading-relaxed pl-6">{pr.interviewerReflection}</p>
-                        </div>
-
-                        {/* 改进建议 */}
-                        {pr.improvementSuggestions.length > 0 && (
-                          <div className="space-y-3">
-                            <div className="flex items-center gap-2">
-                              <Zap size={14} className="text-emerald-500/70" />
-                              <h4 className="text-sm font-semibold text-slate-300">改进建议</h4>
+                        {/* 评价 - QuoteBlock */}
+                        <div className="card-elevated p-4 border-l-4 border-l-sky-500">
+                          <div className="flex items-center gap-2 mb-3">
+                            <div className="w-7 h-7 rounded-lg bg-sky-500/10 flex items-center justify-center ring-1 ring-sky-500/20">
+                              <FileText size={14} className="text-sky-400" />
                             </div>
-                            <div className="space-y-2 pl-6">
+                            <h4 className="text-sm font-semibold text-sky-400">阶段评价</h4>
+                          </div>
+                          <p className="text-sm text-slate-300 leading-relaxed">{pr.evaluation}</p>
+                        </div>
+
+                        {/* 面试官反思 - QuoteBlock */}
+                        <div className="card-elevated p-4 border-l-4 border-l-amber-500">
+                          <div className="flex items-center gap-2 mb-3">
+                            <div className="w-7 h-7 rounded-lg bg-amber-500/10 flex items-center justify-center ring-1 ring-amber-500/20">
+                              <Lightbulb size={14} className="text-amber-400" />
+                            </div>
+                            <h4 className="text-sm font-semibold text-amber-400">面试官反思</h4>
+                          </div>
+                          <p className="text-sm text-slate-300 leading-relaxed">{pr.interviewerReflection}</p>
+                        </div>
+
+                        {/* 改进建议 - 按优先级分组卡片 */}
+                        {pr.improvementSuggestions.length > 0 && (
+                          <div className="card-elevated p-4 border-l-4 border-l-emerald-500">
+                            <div className="flex items-center gap-2 mb-4">
+                              <div className="w-7 h-7 rounded-lg bg-emerald-500/10 flex items-center justify-center ring-1 ring-emerald-500/20">
+                                <Zap size={14} className="text-emerald-400" />
+                              </div>
+                              <h4 className="text-sm font-semibold text-emerald-400">改进建议</h4>
+                            </div>
+                            <div className="space-y-2">
                               {pr.improvementSuggestions.map((imp, i) => {
                                 const pcfg = (PRIORITY_CONFIG[imp.priority] || PRIORITY_CONFIG.low)!
                                 return (
-                                  <div key={i} className="flex items-start gap-2.5">
+                                  <div key={i} className="flex items-start gap-3 p-3 rounded-lg bg-slate-950/30 border border-slate-800/60">
                                     <span className={`text-[10px] px-2 py-0.5 rounded-md border shrink-0 mt-0.5 flex items-center gap-1 ${pcfg.cls}`}>
-                                      <span className={`w-1 h-1 rounded-full ${pcfg.dot}`} />
+                                      <span className={`w-1.5 h-1.5 rounded-full ${pcfg.dot}`} />
                                       {pcfg.label}
                                     </span>
                                     <p className="text-sm text-slate-300 leading-relaxed">{imp.suggestion}</p>
@@ -539,14 +547,16 @@ export function ReviewPage() {
                           </div>
                         )}
 
-                        {/* 本阶段原始对话 */}
+                        {/* 本阶段原始对话 - Card */}
                         {phaseTurns.length > 0 && (
-                          <div className="space-y-2">
-                            <div className="flex items-center gap-2">
-                              <MessageSquare size={14} className="text-slate-500" />
-                              <h4 className="text-sm font-semibold text-slate-300">本阶段对话</h4>
+                          <div className="card p-4">
+                            <div className="flex items-center gap-2 mb-3">
+                              <div className="w-7 h-7 rounded-lg bg-slate-800 flex items-center justify-center">
+                                <MessageSquare size={14} className="text-slate-400" />
+                              </div>
+                              <h4 className="text-sm font-semibold text-slate-100">本阶段对话</h4>
                             </div>
-                            <div className="space-y-2 p-3 rounded-lg bg-slate-950/50 border border-slate-800/60">
+                            <div className="space-y-2 p-3 rounded-lg bg-slate-950/30 border border-slate-800/60">
                               {phaseTurns.map((turn) => (
                                 <div key={turn.id} className="flex items-start gap-2">
                                   <div className="mt-0.5 shrink-0">{renderTurnKind(turn.kind)}</div>
@@ -558,7 +568,7 @@ export function ReviewPage() {
                         )}
 
                         {/* 生成时间 */}
-                        <p className="text-[11px] text-slate-600 pt-2">
+                        <p className="text-[11px] text-slate-600 pt-1">
                           生成于 {new Date(pr.generatedAt).toLocaleString('zh-CN')}
                         </p>
                       </div>
@@ -574,17 +584,36 @@ export function ReviewPage() {
       {/* 整面复盘 */}
       {activeTab === 'full' && fullReview && (
         <div className="space-y-5">
-          {/* 各阶段得分汇总 */}
+          {/* 整体分数展示 - 大号卡片 */}
+          {fullReview.overallScore !== null && (
+            <div className="card-elevated p-6 text-center">
+              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-500/15 to-emerald-600/5 flex items-center justify-center mx-auto mb-3 ring-1 ring-emerald-500/20">
+                <BarChart3 size={28} className="text-emerald-400" />
+              </div>
+              <p className="text-5xl font-bold text-emerald-400 mb-1">{fullReview.overallScore.toFixed(1)}</p>
+              <p className="text-sm text-slate-500">整面总分 / 5.0</p>
+              <div className="mt-4 max-w-xs mx-auto">
+                <ScoreBar score={fullReview.overallScore} />
+              </div>
+            </div>
+          )}
+
+          {/* 各阶段得分汇总 - 条形图卡片 */}
           {fullReview.phaseScoresSummary.length > 0 && (
             <div className="card p-5">
               <div className="flex items-center gap-2 mb-4">
-                <BarChart3 size={16} className="text-sky-400" />
+                <div className="w-7 h-7 rounded-lg bg-sky-500/10 flex items-center justify-center ring-1 ring-sky-500/20">
+                  <BarChart3 size={14} className="text-sky-400" />
+                </div>
                 <h3 className="font-semibold text-slate-100">各阶段表现</h3>
               </div>
-              <div className="space-y-3">
+              <div className="space-y-4">
                 {fullReview.phaseScoresSummary.map((ps) => (
-                  <div key={ps.phaseType} className="flex items-center justify-between gap-4">
-                    <span className="text-sm text-slate-400 w-20">{PHASE_LABELS[ps.phaseType] || ps.phaseType}</span>
+                  <div key={ps.phaseType} className="p-3 rounded-lg bg-slate-950/30 border border-slate-800/60">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm text-slate-200 font-medium">{PHASE_LABELS[ps.phaseType] || ps.phaseType}</span>
+                      <span className="text-sm font-bold text-sky-400">{ps.score.toFixed(1)}</span>
+                    </div>
                     <ScoreBar score={ps.score} />
                   </div>
                 ))}
@@ -592,58 +621,62 @@ export function ReviewPage() {
             </div>
           )}
 
-          {/* 整面额外评价 */}
+          {/* 整面额外评价 - 2列大数字卡片 */}
           <div className="grid grid-cols-2 gap-4">
             {fullReview.coherenceScore !== null && (
               <div className="card p-5 text-center">
-                <div className="w-10 h-10 rounded-xl bg-sky-500/10 flex items-center justify-center mx-auto mb-2 ring-1 ring-sky-500/10">
-                  <TrendingUp size={18} className="text-sky-400" />
+                <div className="w-12 h-12 rounded-xl bg-sky-500/10 flex items-center justify-center mx-auto mb-2 ring-1 ring-sky-500/20">
+                  <TrendingUp size={20} className="text-sky-400" />
                 </div>
-                <p className="text-xs text-slate-500 mb-1">阶段间连贯性</p>
-                <p className="text-2xl font-bold text-sky-400">{fullReview.coherenceScore.toFixed(1)}</p>
+                <p className="text-3xl font-bold text-sky-400 mb-1">{fullReview.coherenceScore.toFixed(1)}</p>
+                <p className="text-xs text-slate-500">阶段间连贯性</p>
               </div>
             )}
             {fullReview.jdMatchScore !== null && (
               <div className="card p-5 text-center">
-                <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center mx-auto mb-2 ring-1 ring-amber-500/10">
-                  <Target size={18} className="text-amber-400" />
+                <div className="w-12 h-12 rounded-xl bg-amber-500/10 flex items-center justify-center mx-auto mb-2 ring-1 ring-amber-500/20">
+                  <Target size={20} className="text-amber-400" />
                 </div>
-                <p className="text-xs text-slate-500 mb-1">JD 匹配度</p>
-                <p className="text-2xl font-bold text-amber-400">{fullReview.jdMatchScore.toFixed(1)}</p>
+                <p className="text-3xl font-bold text-amber-400 mb-1">{fullReview.jdMatchScore.toFixed(1)}</p>
+                <p className="text-xs text-slate-500">JD 匹配度</p>
               </div>
             )}
           </div>
 
-          {/* 整体技术画像 */}
+          {/* 整体技术画像 - QuoteBlock */}
           {fullReview.overallPersona && (
-            <div className="card p-5">
+            <div className="card-elevated p-5 border-l-4 border-l-purple-500">
               <div className="flex items-center gap-2 mb-3">
-                <User size={16} className="text-purple-400" />
-                <h3 className="font-semibold text-slate-100">整体技术画像</h3>
+                <div className="w-7 h-7 rounded-lg bg-purple-500/10 flex items-center justify-center ring-1 ring-purple-500/20">
+                  <User size={14} className="text-purple-400" />
+                </div>
+                <h3 className="font-semibold text-purple-400">整体技术画像</h3>
               </div>
               <p className="text-sm text-slate-300 leading-relaxed">{fullReview.overallPersona}</p>
             </div>
           )}
 
-          {/* 优先级提升建议 */}
+          {/* 优先级提升建议 - 分组卡片 */}
           {fullReview.consolidatedImprovements.length > 0 && (
-            <div className="card p-5">
+            <div className="card-elevated p-5 border-l-4 border-l-emerald-500">
               <div className="flex items-center gap-2 mb-4">
-                <Zap size={16} className="text-emerald-400" />
-                <h3 className="font-semibold text-slate-100">优先级提升建议</h3>
+                <div className="w-7 h-7 rounded-lg bg-emerald-500/10 flex items-center justify-center ring-1 ring-emerald-500/20">
+                  <Zap size={14} className="text-emerald-400" />
+                </div>
+                <h3 className="font-semibold text-emerald-400">优先级提升建议</h3>
               </div>
               <div className="space-y-3">
                 {fullReview.consolidatedImprovements.map((imp, i) => {
                   const pcfg = (PRIORITY_CONFIG[imp.priority] || PRIORITY_CONFIG.low)!
                   return (
-                    <div key={i} className="flex items-start gap-3">
+                    <div key={i} className="flex items-start gap-3 p-3 rounded-lg bg-slate-950/30 border border-slate-800/60">
                       <span className={`text-[10px] px-2 py-0.5 rounded-md border shrink-0 mt-0.5 flex items-center gap-1 ${pcfg.cls}`}>
-                        <span className={`w-1 h-1 rounded-full ${pcfg.dot}`} />
+                        <span className={`w-1.5 h-1.5 rounded-full ${pcfg.dot}`} />
                         {pcfg.label}
                       </span>
                       <div className="min-w-0">
                         <p className="text-sm text-slate-300 leading-relaxed">{imp.suggestion}</p>
-                        <p className="text-[11px] text-slate-600 mt-0.5">
+                        <p className="text-[11px] text-slate-600 mt-1">
                           来源：{imp.sourcePhases.map((p) => PHASE_LABELS[p] || p).join('、')}
                         </p>
                       </div>
@@ -654,22 +687,15 @@ export function ReviewPage() {
             </div>
           )}
 
-          {/* 总评 */}
-          <div className="card p-5">
+          {/* 总评 - QuoteBlock */}
+          <div className="card-elevated p-5 border-l-4 border-l-emerald-500">
             <div className="flex items-center gap-2 mb-3">
-              <CheckCircle2 size={16} className="text-emerald-400" />
-              <h3 className="font-semibold text-slate-100">总评</h3>
+              <div className="w-7 h-7 rounded-lg bg-emerald-500/10 flex items-center justify-center ring-1 ring-emerald-500/20">
+                <CheckCircle2 size={14} className="text-emerald-400" />
+              </div>
+              <h3 className="font-semibold text-emerald-400">总评</h3>
             </div>
             <p className="text-sm text-slate-300 leading-relaxed">{fullReview.overallEvaluation}</p>
-            {fullReview.overallScore !== null && (
-              <div className="mt-4 pt-4 border-t border-slate-800/60 flex items-center justify-between">
-                <span className="text-sm text-slate-500">整面总分</span>
-                <div className="flex items-center gap-3">
-                  <ScoreBar score={fullReview.overallScore} />
-                  <span className="text-xl font-bold text-emerald-400">{fullReview.overallScore.toFixed(1)}</span>
-                </div>
-              </div>
-            )}
           </div>
         </div>
       )}

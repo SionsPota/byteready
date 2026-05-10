@@ -16,7 +16,7 @@ import {
 const navItems = [
   { path: '/dashboard', label: '仪表盘', icon: Home, accent: 'text-sky-400' },
   { path: '/resumes', label: '简历', icon: FileText, accent: 'text-blue-400' },
-  { path: '/training', label: '训练', icon: Dumbbell, accent: 'text-emerald-400' },
+  { path: '/training', label: '模拟', icon: Dumbbell, accent: 'text-emerald-400' },
   { path: '/reviews', label: '复盘', icon: ClipboardList, accent: 'text-amber-400' },
   { path: '/explore', label: '探索', icon: Compass, accent: 'text-purple-400' },
 ]
@@ -38,7 +38,7 @@ export function Layout() {
           </div>
           <div>
             <h1 className="text-lg font-bold tracking-tight text-slate-100">ByteReady</h1>
-            <p className="text-[10px] text-slate-500 font-medium tracking-wide uppercase">AI 面试训练平台</p>
+            <p className="text-[10px] text-slate-500 font-medium tracking-wide uppercase">AI 面试模拟平台</p>
           </div>
         </div>
       </div>

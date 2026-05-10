@@ -123,7 +123,7 @@ function TrendsSection() {
           <div className="w-8 h-8 rounded-lg bg-sky-500/10 flex items-center justify-center ring-1 ring-sky-500/10">
             <TrendingUp size={16} className="text-sky-400" />
           </div>
-          <h2 className="text-base font-semibold text-slate-100">训练表现趋势</h2>
+          <h2 className="text-base font-semibold text-slate-100">模拟表现趋势</h2>
         </div>
         <div className="flex gap-2">
           <button
@@ -176,7 +176,7 @@ function TrendsSection() {
           <div className="text-center py-12">
             <TrendingUp size={24} className="mx-auto text-slate-600 mb-2" />
             <p className="text-sm text-slate-500">还没有足够的复盘数据</p>
-            <p className="text-xs text-slate-600 mt-1">完成至少 1 场训练，这里会自动汇总趋势</p>
+            <p className="text-xs text-slate-600 mt-1">完成至少 1 场模拟，这里会自动汇总趋势</p>
           </div>
         ) : (
           <div className="h-72">
@@ -324,7 +324,7 @@ export function ReviewsPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">复盘</h1>
           <p className="text-sm text-slate-500 mt-1">
-            查看训练表现趋势与全部训练历史
+            查看模拟表现趋势与全部模拟历史
           </p>
         </div>
         <Link
@@ -332,7 +332,7 @@ export function ReviewsPage() {
           className="btn-primary self-start sm:self-auto shrink-0"
         >
           <Zap size={16} />
-          开始新训练
+          开始新模拟
         </Link>
       </div>
 
@@ -341,7 +341,7 @@ export function ReviewsPage() {
         <div className="grid grid-cols-3 gap-3">
           <div className="card p-4 text-center">
             <p className="text-2xl font-bold text-slate-100">{stats.total}</p>
-            <p className="text-xs text-slate-500 mt-1">总训练</p>
+            <p className="text-xs text-slate-500 mt-1">总模拟</p>
           </div>
           <div className="card p-4 text-center">
             <p className="text-2xl font-bold text-emerald-400">{stats.ended}</p>
@@ -359,7 +359,7 @@ export function ReviewsPage() {
       {/* Filters + History */}
       <div>
         <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
-          <h2 className="section-title">训练历史</h2>
+          <h2 className="section-title">模拟历史</h2>
           <div className="flex items-center gap-2 flex-wrap">
             <Filter size={14} className="text-slate-500" />
             <div className="relative">
@@ -400,14 +400,14 @@ export function ReviewsPage() {
           <div className="text-center py-12 card border-dashed">
             <Clock size={24} className="mx-auto text-slate-600 mb-3" />
             <p className="text-slate-500">
-              {trainings.length === 0 ? '还没有训练记录' : '没有符合筛选条件的记录'}
+              {trainings.length === 0 ? '还没有模拟记录' : '没有符合筛选条件的记录'}
             </p>
             {trainings.length === 0 && (
               <Link
                 to="/training"
                 className="btn-primary mt-4"
               >
-                开始第一场训练
+                开始第一场模拟
                 <ArrowRight size={14} />
               </Link>
             )}

@@ -1,12 +1,15 @@
 import { Outlet, Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { LogOut, Home, FileText, Mic, TrendingUp, Settings } from 'lucide-react'
+import { LogOut, Home, FileText, Dumbbell, TrendingUp, Compass, FolderGit2, ClipboardList } from 'lucide-react'
 
 const navItems = [
   { path: '/dashboard', label: '仪表盘', icon: Home },
   { path: '/resumes', label: '简历', icon: FileText },
-  { path: '/interviews/new', label: '开始面试', icon: Mic },
+  { path: '/projects', label: '项目', icon: FolderGit2 },
+  { path: '/training', label: '训练', icon: Dumbbell },
+  { path: '/reviews', label: '复盘', icon: ClipboardList },
   { path: '/trends', label: '趋势', icon: TrendingUp },
+  { path: '/explore', label: '探索', icon: Compass },
 ]
 
 export function Layout() {
@@ -21,7 +24,7 @@ export function Layout() {
       <aside className="w-64 border-r border-slate-800 flex flex-col">
         <div className="p-6">
           <h1 className="text-xl font-bold tracking-tight">ByteReady</h1>
-          <p className="text-xs text-slate-500 mt-1">AI 面试训练平台</p>
+          <p className="text-xs text-slate-500 mt-1">AI 面试训练平台 V2</p>
         </div>
 
         <nav className="flex-1 px-3 space-y-1">

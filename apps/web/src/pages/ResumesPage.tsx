@@ -1,6 +1,8 @@
-import { useEffect, useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { Plus, FileText, Trash2, Upload, X, Loader2 } from 'lucide-react'
+import { useApi } from '../hooks/useApi.ts'
+import { invalidateKey } from '../lib/api.ts'
 
 interface Resume {
   id: string
@@ -11,8 +13,10 @@ interface Resume {
 }
 
 export function ResumesPage() {
-  const [resumes, setResumes] = useState<Resume[]>([])
-  const [loading, setLoading] = useState(true)
+  const { data: resumes, loading, refresh } = useApi<Resume[]>('/api/resumes', {
+    ttl: 30_000,
+  })
+
   const [showPaste, setShowPaste] = useState(false)
   const [pasteText, setPasteText] = useState('')
   const [pasteTitle, setPasteTitle] = useState('')
@@ -21,18 +25,12 @@ export function ResumesPage() {
   const [dragOver, setDragOver] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const fetchResumes = () => {
-    fetch('/api/resumes', { credentials: 'include' })
-      .then((r) => r.json())
-      .then((res) => {
-        if (res.success) setResumes(res.data)
-      })
-      .finally(() => setLoading(false))
-  }
+  const list = resumes ?? []
 
-  useEffect(() => {
-    fetchResumes()
-  }, [])
+  const reload = useCallback(() => {
+    invalidateKey('/api/resumes')
+    refresh()
+  }, [refresh])
 
   const handlePasteSubmit = async () => {
     if (!pasteTitle.trim() || !pasteText.trim()) return
@@ -46,7 +44,7 @@ export function ResumesPage() {
       setShowPaste(false)
       setPasteText('')
       setPasteTitle('')
-      fetchResumes()
+      reload()
     }
   }
 
@@ -78,14 +76,14 @@ export function ResumesPage() {
       if (!res.ok) {
         setUploadError(json.error?.message || '上传失败')
       } else {
-        fetchResumes()
+        reload()
       }
     } catch {
       setUploadError('网络错误，请重试')
     } finally {
       setUploading(false)
     }
-  }, [])
+  }, [reload])
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -103,7 +101,7 @@ export function ResumesPage() {
   const handleDelete = async (id: string) => {
     if (!confirm('确定删除这份简历？')) return
     await fetch(`/api/resumes/${id}`, { method: 'DELETE', credentials: 'include' })
-    fetchResumes()
+    reload()
   }
 
   return (
@@ -199,16 +197,16 @@ export function ResumesPage() {
         </div>
       )}
 
-      {loading ? (
+      {loading && list.length === 0 ? (
         <p className="text-slate-500">加载中...</p>
-      ) : resumes.length === 0 ? (
+      ) : list.length === 0 ? (
         <div className="text-center py-12 border border-dashed border-slate-800 rounded-lg">
           <p className="text-slate-500">还没有简历</p>
           <p className="text-sm text-slate-600 mt-1">上传 PDF/DOCX 文件或粘贴简历内容</p>
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-4">
-          {resumes.map((r) => (
+          {list.map((r) => (
             <div
               key={r.id}
               className="p-4 rounded-lg border border-slate-800 bg-slate-900 flex items-start justify-between"

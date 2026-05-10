@@ -11,7 +11,7 @@ ByteReady 是一个 TypeScript 全栈骨架，面向 2026/05/10 的现场挑战�
 ```
 apps/
   web/      @byteready/web      Vite + React 19 + Tailwind v4 前端
-  server/   @byteready/server   Hono on Node 22 后端
+  server/   @byteready/server   Hono on Node 24 后端
 packages/
   shared/   @byteready/shared   前后端共享类型与 ApiResponse 信封
 .local/     本地屏蔽目录（.gitignore）。PROJECT_PREP.md 在这里——含外部 API 鉴权细节与
@@ -35,6 +35,12 @@ pnpm dev:server   # http://localhost:$SERVER_PORT (默认 8787，可被 .env 覆
 
 # 类型检查（所有 workspace）
 pnpm typecheck
+
+# 测试（vitest）
+pnpm test
+
+# 一键校验：typecheck + test + build。每次交付功能前必须全绿
+pnpm verify
 
 # 格式化
 pnpm format
@@ -70,6 +76,32 @@ pnpm --filter @byteready/web preview
 
 ### Env 加载
 **只有一个 `.env`，在仓库根目录**。`apps/server/src/env.ts` 用相对路径 `../../../.env` 显式加载（无论 CWD 是哪里都能找到）。前端不要读 `.env`，所有外部 API Key 必须经后端代理调用——前端只跟 `/api/*` 说话。
+
+## 功能交付标准（强制）
+
+新写或修改的功能模块**必须**配套：
+
+1. **加测试**：`vitest run` 是唯一的测试运行器。
+   - 后端路由：用 Hono 自带的 `route.request(path, init?)` 直接发模拟请求，不要起真实 HTTP 端口。例：`apps/server/src/routes/health.test.ts`。
+   - 共享逻辑：直接 import + 调用断言。例：`packages/shared/src/api.test.ts`。
+   - 测试文件与被测文件**同目录**，命名 `<name>.test.ts`，`vitest` 默认会发现。
+2. **跑 `pnpm verify` 全绿**才算交付完成。`verify = typecheck + test + build`，任何一项失败都不要把任务标 completed。
+3. **测试粒度真实**：覆盖核心路径与失败分支，不能写 `expect(true).toBe(true)` 凑数。改动跨模块/路由的，加集成测试。
+
+`apps/web` 暂未引入 React 组件测试基建（jsdom + @testing-library/react）。哪天真要给前端写测试，**先在测试基建上立项**再写功能，不要把基建塞进功能 commit 里。
+
+### 端口残留清理
+
+`pnpm dev` 异常退出后，Windows 上 `node --watch` 子进程经常变孤儿挂在 8000/5173 上。下次启动会撞 `EADDRINUSE`——server 已经做了兜底，会打印中文清理指引，照着做就行：
+
+```bash
+# Windows
+netstat -ano | findstr :8000
+taskkill /PID <pid> /F
+
+# Linux/Mac
+lsof -ti:8000 | xargs kill
+```
 
 ## Conventions
 

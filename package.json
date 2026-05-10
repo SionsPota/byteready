@@ -10,9 +10,12 @@
   },
   "packageManager": "pnpm@9.15.9",
   "scripts": {
-    "dev": "pnpm -r --parallel run dev",
+    "dev": "pnpm --parallel --filter @byteready/web --filter @byteready/server run dev",
     "dev:web": "pnpm --filter @byteready/web run dev",
     "dev:server": "pnpm --filter @byteready/server run dev",
+    "dev:lab": "pnpm --parallel --filter @byteready/web-lab --filter @byteready/server-lab run dev",
+    "dev:web-lab": "pnpm --filter @byteready/web-lab run dev",
+    "dev:server-lab": "pnpm --filter @byteready/server-lab run dev",
     "build": "pnpm -r run build",
     "test": "pnpm --filter @byteready/shared --filter @byteready/server run test",
     "typecheck": "pnpm -r run typecheck",

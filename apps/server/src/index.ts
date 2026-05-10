@@ -3,8 +3,8 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { logger } from 'hono/logger'
 import { err } from '@byteready/shared'
-import { env } from './env'
-import { healthRoute } from './routes/health'
+import { env } from './env.ts'
+import { healthRoute } from './routes/health.ts'
 
 const app = new Hono()
 

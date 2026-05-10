@@ -5,10 +5,12 @@ import { companiesRoute } from './companies.ts'
 import { tagsRoute } from './tags.ts'
 import { trendsRoute } from './trends.ts'
 import { projectsRoute } from './projects.ts'
+import { hubRoute } from './hub.ts'
 
 export const exploreRoute = new Hono()
 exploreRoute.use('*', requireAuth)
 
+exploreRoute.route('/hub', hubRoute)
 exploreRoute.route('/experiences', experiencesRoute)
 exploreRoute.route('/companies', companiesRoute)
 exploreRoute.route('/tags', tagsRoute)

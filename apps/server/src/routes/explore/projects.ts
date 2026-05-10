@@ -18,6 +18,7 @@ import {
   recommendProjects,
   type ProjectForRecommend,
 } from '../../lib/explore/recommender.ts'
+import { findRelatedByTags } from '../../lib/explore/cross-ref.ts'
 
 export const projectsRoute = new Hono()
 
@@ -127,5 +128,10 @@ projectsRoute.get('/:id', (c) => {
     .listByIds(decoded.relatedTrendIds)
     .map(decodeIndustryTrend)
 
-  return c.json(ok({ ...decoded, relatedTrends }))
+  const relatedByTags = findRelatedByTags(getDb(), decoded.tags, {
+    type: 'project',
+    id: decoded.id,
+  })
+
+  return c.json(ok({ ...decoded, relatedTrends, relatedByTags }))
 })

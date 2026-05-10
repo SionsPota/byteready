@@ -13,6 +13,7 @@ import {
   createLearningProjectRepository,
   decodeLearningProject,
 } from '../../lib/explore/projects.repository.ts'
+import { findRelatedByTags } from '../../lib/explore/cross-ref.ts'
 
 export const experiencesRoute = new Hono()
 
@@ -90,7 +91,7 @@ experiencesRoute.get('/:id', (c) => {
   // 自增浏览量
   repo.incrementViews(id)
 
-  // 加载关联的趋势和项目
+  // 加载关联的趋势和项目（通过显式 ID 关联）
   const trendRepo = createIndustryTrendRepository(getDb())
   const projectRepo = createLearningProjectRepository(getDb())
   const relatedTrends = trendRepo
@@ -115,6 +116,13 @@ experiencesRoute.get('/:id', (c) => {
       language: p.language,
       impactScore: p.impactScore,
     }))
+
+  // tag 名称交集互引（跨类型）
+  const tagNames = row.tags.map((t) => t.name)
+  const relatedByTags = findRelatedByTags(getDb(), tagNames, {
+    type: 'experience',
+    id: row.id,
+  })
 
   return c.json(
     ok({
@@ -142,6 +150,7 @@ experiencesRoute.get('/:id', (c) => {
       })),
       relatedTrends,
       relatedProjects,
+      relatedByTags,
     }),
   )
 })

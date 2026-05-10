@@ -7,7 +7,6 @@ import { importInterviewQa } from './scripts/import-interview-qa.ts'
 import { isInterviewQaImported, getInterviewQaCount } from './lib/questions/search.ts'
 import { getDb } from './lib/db/client.ts'
 import { seedExploreIfEmpty } from './lib/explore/seed.ts'
-import { seedDemoData } from './lib/demo/seed.ts'
 
 const app = createApp()
 
@@ -41,27 +40,6 @@ const checkAndImport = async () => {
     }
   } catch (err) {
     console.error('[startup] 探索数据 seed 失败:', err)
-  }
-
-  // Demo 用户数据（简历 / 项目 / 训练 / 复盘）
-  if (env.BYTEREADY_DEMO_SEED) {
-    try {
-      const result = await seedDemoData(db)
-      if (result.seeded) {
-        console.log(
-          `[startup] Demo 数据已 seed: ${result.users} 用户, ${result.resumes} 简历, ${result.projects} 项目, ${result.sessions} 训练`,
-        )
-        if (result.reviewsGenerated) {
-          console.log('[startup] Demo 复盘数据已通过 LLM 生成')
-        } else {
-          console.log('[startup] Demo 复盘数据未生成（skipReviews=true）')
-        }
-      } else {
-        console.log('[startup] Demo 数据已存在，跳过')
-      }
-    } catch (err) {
-      console.error('[startup] Demo 数据 seed 失败:', err)
-    }
   }
 }
 

@@ -9,10 +9,8 @@ import { meRoute } from './routes/me.ts'
 import { resumesRoute } from './routes/resumes.ts'
 import { questionsRoute } from './routes/questions.ts'
 import { voiceRoute } from './routes/voice.ts'
-import { interviewsRoute } from './routes/interviews.ts'
 import { trainingRoute } from './routes/training.ts'
 import { projectsRoute } from './routes/projects.ts'
-import { reviewsRoute } from './routes/reviews.ts'
 import { trendsRoute } from './routes/trends.ts'
 import { exploreRoute } from './routes/explore/index.ts'
 import { skillsRoute } from './routes/skills.ts'
@@ -29,10 +27,8 @@ export const createApp = () => {
   app.route('/api/resumes', resumesRoute)
   app.route('/api/questions', questionsRoute)
   app.route('/api/voice', voiceRoute)
-  app.route('/api/interviews', interviewsRoute) // V1 兼容
   app.route('/api/training', trainingRoute)
   app.route('/api/projects', projectsRoute)
-  app.route('/api/reviews', reviewsRoute)
   app.route('/api/trends', trendsRoute)
   app.route('/api/explore', exploreRoute)
   app.route('/api/skills', skillsRoute)

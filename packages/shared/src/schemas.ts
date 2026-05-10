@@ -80,10 +80,9 @@ export type ProjectUpdateInput = z.infer<typeof projectUpdateSchema>
 
 export const trainingCreateSchema = z.object({
   type: z.enum(['full', 'self_intro', 'project_qa', 'random_qa']).default('full'),
-  position: z.string().min(1).max(100),
+  position: z.string().max(100).optional(),
   target_company: z.string().max(100).optional(),
   job_description: z.string().max(5000).optional(),
-  persona_id: z.string().max(100).optional(),
   resume_id: z.string().uuid().optional(),
   project_ids: z.array(z.string().uuid()).optional(),
 })
@@ -99,37 +98,3 @@ export const questionFilterSchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
 })
-
-// ========== 复盘 ==========
-
-export const reviewCreateSchema = z.object({
-  type: z.enum(['interview', 'project', 'custom']),
-  target_id: z.string().min(1),
-  content: z.string().min(1).optional(),
-})
-export type ReviewCreateInput = z.infer<typeof reviewCreateSchema>
-
-// ========== 评分维度 ==========
-
-export const axisSchema = z.enum([
-  '专业知识深度',
-  '项目复述质量',
-  '表达与结构',
-  '逻辑与问题解决',
-  '沟通自然度',
-])
-
-// ========== V1 兼容（将在 Phase 2 移除）==========
-
-/** @deprecated 使用 trainingCreateSchema */
-export const interviewCreateSchema = trainingCreateSchema
-/** @deprecated 使用 TrainingCreateInput */
-export type InterviewCreateInput = TrainingCreateInput
-
-/** @deprecated V2 已移除职级 */
-export const levelSchema = z.enum(['junior', 'mid', 'senior', 'expert'])
-
-/** @deprecated 使用 projectUpdateSchema */
-export const resumeProjectUpdateSchema = projectUpdateSchema
-/** @deprecated 使用 ProjectUpdateInput */
-export type ResumeProjectUpdateInput = ProjectUpdateInput

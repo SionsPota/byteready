@@ -7,7 +7,9 @@ describe('openDbInMemory', () => {
     const tables = db
       .prepare("SELECT name FROM sqlite_master WHERE type='table'")
       .all() as { name: string }[]
-    expect(tables.map((t) => t.name)).toContain('conversations')
+    const names = tables.map((t) => t.name)
+    expect(names).toContain('users')
+    expect(names).toContain('training_sessions')
     db.close()
   })
 
@@ -15,9 +17,11 @@ describe('openDbInMemory', () => {
     const db1 = openDbInMemory()
     const db2 = openDbInMemory()
     db1
-      .prepare('INSERT INTO conversations (id, created_at, updated_at) VALUES (?, ?, ?)')
-      .run('c1', Date.now(), Date.now())
-    const inDb2 = db2.prepare('SELECT id FROM conversations WHERE id = ?').get('c1')
+      .prepare(
+        'INSERT INTO users (id, email, password_hash, created_at) VALUES (?, ?, ?, ?)',
+      )
+      .run('u1', 'a@b.com', 'h', Date.now())
+    const inDb2 = db2.prepare('SELECT id FROM users WHERE id = ?').get('u1')
     expect(inDb2).toBeUndefined()
     db1.close()
     db2.close()
@@ -28,9 +32,9 @@ describe('openDbInMemory', () => {
     expect(() =>
       db
         .prepare(
-          'INSERT INTO messages (id, conversation_id, role, content, status, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+          'INSERT INTO training_sessions (id, owner_id, type, position, status, created_at) VALUES (?, ?, ?, ?, ?, ?)',
         )
-        .run('m1', 'nonexistent', 'user', 'hi', 'completed', Date.now()),
+        .run('s1', 'nonexistent_user', 'full', 'backend', 'pending', Date.now()),
     ).toThrow()
     db.close()
   })

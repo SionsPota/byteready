@@ -3,27 +3,6 @@ import type { DatabaseSync } from 'node:sqlite'
 // ========== V2+V3 Schema (幂等，IF NOT EXISTS) ==========
 
 const SCHEMA_LATEST = `
--- 保留：对话表
-CREATE TABLE IF NOT EXISTS conversations (
-  id TEXT PRIMARY KEY,
-  title TEXT,
-  model TEXT,
-  system_prompt TEXT,
-  created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS messages (
-  id TEXT PRIMARY KEY,
-  conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
-  role TEXT NOT NULL CHECK (role IN ('system','user','assistant')),
-  content TEXT NOT NULL DEFAULT '',
-  reasoning_content TEXT,
-  status TEXT NOT NULL DEFAULT 'completed' CHECK (status IN ('pending','completed','aborted','error')),
-  created_at INTEGER NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages (conversation_id, created_at);
-
 -- 保留：KV
 CREATE TABLE IF NOT EXISTS kv (
   key TEXT PRIMARY KEY,
@@ -111,6 +90,11 @@ CREATE TABLE IF NOT EXISTS training_sessions (
   current_topic TEXT,
   started_at INTEGER,
   ended_at INTEGER,
+  review_status TEXT NOT NULL DEFAULT 'idle' CHECK (review_status IN ('idle','generating','ready','partial','failed')),
+  review_progress TEXT,
+  review_error TEXT,
+  review_started_at INTEGER,
+  review_finished_at INTEGER,
   created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_training_sessions_owner ON training_sessions (owner_id);
@@ -190,42 +174,6 @@ CREATE TABLE IF NOT EXISTS full_reviews (
   created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_full_reviews_session ON full_reviews (session_id);
-
--- V2+V3：趋势快照（兼容旧数据，后续通过 V3 双轨扩展）
-CREATE TABLE IF NOT EXISTS trend_snapshots (
-  id TEXT PRIMARY KEY,
-  owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  axis TEXT NOT NULL,
-  value REAL NOT NULL,
-  session_id TEXT REFERENCES training_sessions(id) ON DELETE CASCADE,
-  created_at INTEGER NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_trend_snapshots_owner ON trend_snapshots (owner_id, created_at);
-
--- V3：阶段级趋势快照
-CREATE TABLE IF NOT EXISTS phase_trend_snapshots (
-  id TEXT PRIMARY KEY,
-  owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  phase_type TEXT NOT NULL,
-  dimension TEXT NOT NULL,
-  score REAL NOT NULL,
-  session_id TEXT REFERENCES training_sessions(id) ON DELETE CASCADE,
-  phase_review_id TEXT REFERENCES phase_reviews(id) ON DELETE CASCADE,
-  created_at INTEGER NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_phase_trend_owner ON phase_trend_snapshots (owner_id, phase_type, dimension, created_at);
-
--- V3：整面级趋势快照
-CREATE TABLE IF NOT EXISTS full_trend_snapshots (
-  id TEXT PRIMARY KEY,
-  owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  metric TEXT NOT NULL,
-  value REAL NOT NULL,
-  session_id TEXT REFERENCES training_sessions(id) ON DELETE CASCADE,
-  full_review_id TEXT REFERENCES full_reviews(id) ON DELETE CASCADE,
-  created_at INTEGER NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_full_trend_owner ON full_trend_snapshots (owner_id, metric, created_at);
 
 -- 探索：公司画像（含 logo/industry/color）
 CREATE TABLE IF NOT EXISTS company_profiles (
@@ -447,10 +395,6 @@ const migrateV1ToV2 = (db: DatabaseSync): void => {
       db.exec(`DROP TABLE IF EXISTS _backup_interview_sessions`)
       db.exec(`CREATE TABLE _backup_interview_sessions AS SELECT * FROM interview_sessions`)
     }
-    if (hasTable(db, 'trend_snapshots')) {
-      db.exec(`DROP TABLE IF EXISTS _backup_trend_snapshots`)
-      db.exec(`CREATE TABLE _backup_trend_snapshots AS SELECT * FROM trend_snapshots`)
-    }
 
     // 4-5. 删除旧表
     db.exec(`DROP TABLE IF EXISTS interview_sessions`)
@@ -517,26 +461,7 @@ const migrateV1ToV2 = (db: DatabaseSync): void => {
       `)
     }
 
-    // 10. 重建 trend_snapshots
-    if (hasTable(db, '_backup_trend_snapshots')) {
-      db.exec(`DROP TABLE IF EXISTS trend_snapshots`)
-      db.exec(`
-        CREATE TABLE trend_snapshots (
-          id TEXT PRIMARY KEY,
-          owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-          axis TEXT NOT NULL,
-          value REAL NOT NULL,
-          session_id TEXT REFERENCES training_sessions(id) ON DELETE CASCADE,
-          created_at INTEGER NOT NULL
-        )
-      `)
-      db.exec(`CREATE INDEX idx_trend_snapshots_owner ON trend_snapshots (owner_id, created_at)`)
-      db.exec(`
-        INSERT INTO trend_snapshots (id, owner_id, axis, value, session_id, created_at)
-        SELECT id, owner_id, axis, value, session_id, created_at
-        FROM _backup_trend_snapshots
-      `)
-    }
+    // 10. trend_snapshots 表已废弃（V3 趋势改为派生自 phase_reviews/full_reviews）
 
     // 11. 为 resumes 添加新列
     const resumeCols = ['contact_name', 'contact_email', 'contact_phone', 'contact_location', 'summary', 'educations', 'experiences', 'skills', 'project_ids']
@@ -573,7 +498,6 @@ const migrateV1ToV2 = (db: DatabaseSync): void => {
       DROP TABLE IF EXISTS _backup_turns;
       DROP TABLE IF EXISTS _backup_interview_sessions;
       DROP TABLE IF EXISTS _backup_review_reports;
-      DROP TABLE IF EXISTS _backup_trend_snapshots;
       DROP TABLE IF EXISTS _backup_questions;
     `)
   } finally {
@@ -726,5 +650,36 @@ export const migrate = (db: DatabaseSync): void => {
   // 再执行 V2→V3 列迁移
   if (needsV2ToV3Migration(db)) {
     migrateV2ToV3(db)
+  }
+  // 复盘状态机：给已存在的 training_sessions 表补 review_* 列（旧库无这些列）
+  migrateAddReviewColumns(db)
+  // 趋势改为派生查询，丢弃所有快照表（V1 trend_snapshots / V3 phase_trend_snapshots / full_trend_snapshots）
+  db.exec(`DROP TABLE IF EXISTS trend_snapshots`)
+  db.exec(`DROP TABLE IF EXISTS phase_trend_snapshots`)
+  db.exec(`DROP TABLE IF EXISTS full_trend_snapshots`)
+}
+
+// 给老库的 training_sessions 表补复盘状态字段。SQLite ALTER TABLE 不支持加 CHECK 约束，
+// 所以这里只补列；新建表（SCHEMA_LATEST）走完整带 CHECK 的版本。
+const migrateAddReviewColumns = (db: DatabaseSync): void => {
+  if (!hasTable(db, 'training_sessions')) return
+  const cols = db
+    .prepare(`PRAGMA table_info(training_sessions)`)
+    .all() as { name: string }[]
+  const colSet = new Set(cols.map((c) => c.name))
+  const additions: Array<[string, string]> = [
+    ['review_status', `TEXT NOT NULL DEFAULT 'idle'`],
+    ['review_progress', `TEXT`],
+    ['review_error', `TEXT`],
+    ['review_started_at', `INTEGER`],
+    ['review_finished_at', `INTEGER`],
+  ]
+  for (const [name, def] of additions) {
+    if (colSet.has(name)) continue
+    try {
+      db.exec(`ALTER TABLE training_sessions ADD COLUMN ${name} ${def}`)
+    } catch {
+      // 并发或重复执行时已存在，忽略
+    }
   }
 }

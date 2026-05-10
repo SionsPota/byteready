@@ -68,6 +68,8 @@ export function InterviewRunPage() {
   const [voiceState, setVoiceState] = useState<VoiceState>('idle')
   const [ttsEnabled, setTtsEnabled] = useState(true)
   const [voiceError, setVoiceError] = useState<string | null>(null)
+  // 语音偏好：上一次交互是语音输入则下次自动进入录音
+  const [voicePreferred, setVoicePreferred] = useState(false)
   // 乐观更新：用户提交后立即把候选人/面试官气泡塞进列表，避免等服务器/语音回来时界面"卡住"
   const [optimisticTurns, setOptimisticTurns] = useState<Turn[]>([])
   // 流式渲染：把 audio.currentTime / audio.duration 映射成渐进显示的字符百分比
@@ -76,7 +78,8 @@ export function InterviewRunPage() {
   const scrollRef = useRef<HTMLDivElement>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
-  const submitAnswerRef = useRef<(text?: string) => Promise<void>>(async () => {})
+  const submitAnswerRef = useRef<(text?: string) => void>(() => {})
+  const wasIdleRef = useRef(true)
 
   // 麦克风可用性：getUserMedia 只在 https / localhost 下可用
   const hasMic =
@@ -91,6 +94,8 @@ export function InterviewRunPage() {
       if (trimmed) {
         void submitAnswerRef.current(trimmed)
       } else {
+        // 没识别到内容，取消语音偏好，避免无限自动录音
+        setVoicePreferred(false)
         setVoiceState('idle')
       }
     },
@@ -263,10 +268,12 @@ export function InterviewRunPage() {
     }
   }
 
-  const handleAnswer = async (textOverride?: string) => {
+  const handleAnswer = async (textOverride?: string, viaVoice = false) => {
     if (!id) return
     const text = (textOverride ?? answer).trim()
     if (!text || loading) return
+
+    setVoicePreferred(viaVoice)
 
     // 1. 立即把用户回答塞进列表，输入框清空（解决"回车后界面什么都看不到"）
     const userTurnId = `optimistic-user-${Date.now()}`
@@ -339,7 +346,7 @@ export function InterviewRunPage() {
     await fetchSession()
     setOptimisticTurns([])
   }
-  submitAnswerRef.current = handleAnswer
+  submitAnswerRef.current = (text) => void handleAnswer(text, true)
 
   const startRecording = async () => {
     if (!hasMic) {
@@ -382,6 +389,28 @@ export function InterviewRunPage() {
   const canAnswer = started && !isEnded && !loading && voiceState !== 'playing'
   const stateLabel = session.currentState ? STATE_LABELS[session.currentState] || session.currentState : ''
   const stateColorClass = session.currentState ? STATE_COLORS[session.currentState] || STATE_COLORS.IDLE : STATE_COLORS.IDLE
+
+  // 语音偏好：上次用语音则面试官回复结束后自动开始录音
+  const asrStartRef = useRef(() => Promise.resolve())
+  asrStartRef.current = asr.start
+  useEffect(() => {
+    const wasIdle = wasIdleRef.current
+    wasIdleRef.current = voiceState === 'idle'
+    if (
+      voiceState === 'idle' &&
+      !wasIdle &&
+      voicePreferred &&
+      started &&
+      !loading &&
+      !isEnded &&
+      hasMic
+    ) {
+      setVoiceError(null)
+      setAnswer('')
+      setVoiceState('recording')
+      void asrStartRef.current()
+    }
+  }, [voiceState, voicePreferred, started, loading, isEnded, hasMic])
 
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] lg:h-[calc(100vh-4rem)] animate-fade-in">
@@ -599,14 +628,14 @@ export function InterviewRunPage() {
               />
               <div className="flex gap-2">
                 <button
-                  onClick={() => handleAnswer()}
+                  onClick={() => handleAnswer(undefined, true)}
                   disabled={!answer.trim()}
                   className="btn-primary flex-1"
                 >
                   确认提交
                 </button>
                 <button
-                  onClick={() => { setVoiceState('idle'); setAnswer('') }}
+                  onClick={() => { setVoicePreferred(false); setVoiceState('idle'); setAnswer('') }}
                   className="btn-secondary"
                 >
                   重新录音
@@ -621,7 +650,7 @@ export function InterviewRunPage() {
                 type="text"
                 value={answer}
                 onChange={(e) => setAnswer(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleAnswer()}
+                onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleAnswer(undefined, false)}
                 placeholder="输入你的回答，或点击麦克风语音输入..."
                 className="input-field flex-1 px-4 py-2.5"
               />
@@ -635,7 +664,7 @@ export function InterviewRunPage() {
                 </button>
               )}
               <button
-                onClick={() => handleAnswer()}
+                onClick={() => handleAnswer(undefined, false)}
                 disabled={!answer.trim() || loading}
                 className="btn-primary px-4"
               >

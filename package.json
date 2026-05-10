@@ -1,0 +1,26 @@
+{
+  "name": "byteready",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "ByteReady · TypeScript 全栈项目（Vite + React 前端 / Hono 后端）",
+  "engines": {
+    "node": ">=20",
+    "pnpm": ">=9"
+  },
+  "packageManager": "pnpm@9.15.9",
+  "scripts": {
+    "dev": "pnpm -r --parallel run dev",
+    "dev:web": "pnpm --filter @byteready/web run dev",
+    "dev:server": "pnpm --filter @byteready/server run dev",
+    "build": "pnpm -r run build",
+    "typecheck": "pnpm -r run typecheck",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "clean": "pnpm -r exec rm -rf dist build .turbo node_modules/.vite"
+  },
+  "devDependencies": {
+    "prettier": "^3.4.2",
+    "typescript": "^5.7.3"
+  }
+}

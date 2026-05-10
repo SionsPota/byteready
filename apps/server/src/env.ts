@@ -59,4 +59,5 @@ export const env = {
   VOLCENGINE_ASR_SAMPLE_RATE: numberEnv('VOLCENGINE_ASR_SAMPLE_RATE', 16000),
 
   BYTEREADY_DB_PATH: optionalEnv('BYTEREADY_DB_PATH', defaultDbPath),
+  BYTEREADY_DEMO_SEED: optionalEnv('BYTEREADY_DEMO_SEED', 'false') === 'true',
 }

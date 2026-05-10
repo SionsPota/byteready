@@ -7,14 +7,15 @@ export const voiceRoute = new Hono()
 voiceRoute.use('*', requireAuth)
 
 voiceRoute.post('/tts', async (c) => {
-  let body: { text?: string; speaker?: string; format?: 'mp3' | 'ogg_opus' | 'pcm' }
+  let body: { text?: string; speaker?: string; voice?: string; format?: 'mp3' | 'ogg_opus' | 'pcm' }
   try {
     body = await c.req.json()
   } catch {
     return c.json(err('VALIDATION', '请求体必须是 JSON'), 400)
   }
 
-  const { text, speaker, format } = body
+  const { text, format } = body
+  const speaker = body.speaker ?? body.voice
   if (!text || typeof text !== 'string') {
     return c.json(err('VALIDATION', 'text 必填'), 400)
   }

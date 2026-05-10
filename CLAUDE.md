@@ -52,9 +52,9 @@ pnpm --filter @byteready/web preview
 `apps/server` 的 `start` 也用 `tsx src/index.ts`，**没有** `tsc -> node dist/...` 这一步。这是为了避免 monorepo 里 `@byteready/shared` 的 TS 源码导出在 Node 运行时无法解析的问题。要部署到生产，直接 `pnpm --filter @byteready/server start`，或在容器里跑 `tsx`。如果以后真要切换成预编译产物，shared 也要一起改成发布编译产物。
 
 ### 前后端连接：Vite 代理 /api
-`apps/web/vite.config.ts` 把 `/api/*` 代理到 `http://localhost:8787`。**前端必须用 `/api/...` 相对路径**调用后端，不要写绝对 URL，这样开发与生产同源。生产部署时，由反向代理（或后端静态托管）把 `/api` 与 `/`（前端构建产物）放在同一域名下。
+`apps/web/vite.config.ts` 把 `/api/*` 代理到后端。代理目标端口在启动时通过 `loadEnv` 从仓库根 `.env` 的 `SERVER_PORT` 读取，无该变量时默认 `8787`。**前端必须用 `/api/...` 相对路径**调用后端，不要写绝对 URL，这样开发与生产同源。生产部署时，由反向代理（或后端静态托管）把 `/api` 与 `/`（前端构建产物）放在同一域名下。
 
-修改后端端口：改 `.env` 里的 `SERVER_PORT`，**同时**改 `apps/web/vite.config.ts` 里的 proxy target（这个值是硬编码的，没读 env）。
+修改后端端口：只改 `.env` 里的 `SERVER_PORT` 即可，前后端会自动同步。
 
 ### API 响应信封
 所有后端 JSON 必须用 `@byteready/shared` 的 `ApiResponse<T>`。新路由用 `ok(data)` / `err(code, message)` 辅助函数，不要手写裸对象。`apps/server/src/index.ts` 里已有全局 `notFound` 与 `onError`，新增路由不需要重复处理这两类。
@@ -83,8 +83,8 @@ pnpm --filter @byteready/web preview
 - base config 开了 `noUncheckedIndexedAccess`：`arr[i]` 和 `obj[key]` 默认是 `T | undefined`，不要 `!` 强断，先 narrow
 
 ### 端口
-- web `5173`、server `8787`、Vite proxy 硬编码 `8787`
-- 改端口时记得三处一起改：`.env`、`apps/web/vite.config.ts`、有路径硬编码的地方
+- web `5173`、server 默认 `8787`（受 `.env` 中 `SERVER_PORT` 覆盖）
+- Vite proxy 通过 `loadEnv` 自动同步 server 端口；改端口只需改 `.env`
 
 ## External APIs (配置在 .env)
 
